@@ -20,16 +20,15 @@ import (
 	"sync/atomic"
 	"time"
 
-	pbbstream "github.com/dfuse-io/pbgo/dfuse/bstream/v1"
-	pbheadinfo "github.com/dfuse-io/pbgo/dfuse/headinfo/v1"
-	pbhealth "github.com/dfuse-io/pbgo/grpc/health/v1"
-	"github.com/dfuse-io/shutter"
 	"github.com/dfuse-io/bstream"
 	"github.com/dfuse-io/bstream/blockstream"
 	"github.com/dfuse-io/bstream/forkable"
 	"github.com/dfuse-io/dgrpc"
 	"github.com/dfuse-io/dstore"
+	pbheadinfo "github.com/dfuse-io/pbgo/dfuse/headinfo/v1"
+	pbhealth "github.com/dfuse-io/pbgo/grpc/health/v1"
 	"github.com/dfuse-io/relayer/metrics"
+	"github.com/dfuse-io/shutter"
 	"github.com/golang/protobuf/ptypes"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -38,7 +37,6 @@ import (
 type Relayer struct {
 	*shutter.Shutter
 
-	Protocol            pbbstream.Protocol
 	sourceAddresses     []string
 	mergerAddr          string
 	ready               bool
@@ -50,10 +48,9 @@ type Relayer struct {
 	lastSentBlockAtUnix int64 // Shared-state between threads (only read / mutate using atomic. primitives)
 }
 
-func NewRelayer(Protocol pbbstream.Protocol, sourceAddresses []string, mergerAddr string, maxSourceLatency time.Duration, grpcListenAddr string, maxDriftTolerance time.Duration, bufferSize int) *Relayer {
+func NewRelayer(sourceAddresses []string, mergerAddr string, maxSourceLatency time.Duration, grpcListenAddr string, maxDriftTolerance time.Duration, bufferSize int) *Relayer {
 	r := &Relayer{
 		Shutter:           shutter.New(),
-		Protocol:          Protocol,
 		sourceAddresses:   sourceAddresses,
 		mergerAddr:        mergerAddr,
 		maxSourceLatency:  maxSourceLatency,
@@ -239,7 +236,7 @@ func (r *Relayer) StartRelayingBlocks(startBlockReady chan uint64, blockStore ds
 	gate := bstream.NewBlockNumGate(startBlock, bstream.GateInclusive, forkableHandler)
 
 	fileSourceFactory := bstream.SourceFactory(func(subHandler bstream.Handler) bstream.Source {
-		return bstream.NewFileSource(r.Protocol, blockStore, startBlock, 2, nil, subHandler)
+		return bstream.NewFileSource(blockStore, startBlock, 2, nil, subHandler)
 	})
 
 	js := bstream.NewJoiningSource(fileSourceFactory, r.newMultiplexedSource, gate, bstream.JoiningSourceMergerAddr(r.mergerAddr), bstream.JoiningSourceTargetBlockNum(2), bstream.JoiningSourceName("relayer"))

@@ -19,12 +19,12 @@ import (
 	"fmt"
 	"time"
 
-	pbbstream "github.com/dfuse-io/pbgo/dfuse/bstream/v1"
-	pbhealth "github.com/dfuse-io/pbgo/grpc/health/v1"
-	"github.com/dfuse-io/shutter"
 	"github.com/dfuse-io/dgrpc"
 	"github.com/dfuse-io/dstore"
+	pbbstream "github.com/dfuse-io/pbgo/dfuse/bstream/v1"
+	pbhealth "github.com/dfuse-io/pbgo/grpc/health/v1"
 	"github.com/dfuse-io/relayer"
+	"github.com/dfuse-io/shutter"
 	"go.uber.org/zap"
 )
 
@@ -67,7 +67,7 @@ func (a *App) Run() error {
 		a.readinessProbe = pbhealth.NewHealthClient(gs)
 	}
 
-	rlayer := relayer.NewRelayer(a.config.Protocol, a.config.SourcesAddr, a.config.MergerAddr, a.config.MaxSourceLatency, a.config.GRPCListenAddr, a.config.MaxDrift, a.config.BufferSize)
+	rlayer := relayer.NewRelayer(a.config.SourcesAddr, a.config.MergerAddr, a.config.MaxSourceLatency, a.config.GRPCListenAddr, a.config.MaxDrift, a.config.BufferSize)
 	startBlockReady := make(chan uint64)
 	go rlayer.PollSourceHeadUntilReady(startBlockReady, a.config.MaxSourceLatency, a.config.MinStartOffset)
 
