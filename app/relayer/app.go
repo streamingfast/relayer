@@ -22,7 +22,6 @@ import (
 	"github.com/dfuse-io/dgrpc"
 	"github.com/dfuse-io/dmetrics"
 	"github.com/dfuse-io/dstore"
-	pbbstream "github.com/dfuse-io/pbgo/dfuse/bstream/v1"
 	pbhealth "github.com/dfuse-io/pbgo/grpc/health/v1"
 	"github.com/dfuse-io/relayer"
 	"github.com/dfuse-io/relayer/metrics"
@@ -33,17 +32,15 @@ import (
 var RelayerStartAborted = fmt.Errorf("getting start block aborted by relayer application terminating signal")
 
 type Config struct {
-	SourcesAddr          []string
-	GRPCListenAddr       string
-	MergerAddr           string
-	BufferSize           int
-	MaxDrift             time.Duration
-	MaxSourceLatency     time.Duration
-	MinStartOffset       uint64
-	InitTime             time.Duration
-	SourceStoreURL       string
-	Protocol             pbbstream.Protocol
-	EnableReadinessProbe bool
+	SourcesAddr      []string
+	GRPCListenAddr   string
+	MergerAddr       string
+	BufferSize       int
+	MaxDrift         time.Duration
+	MaxSourceLatency time.Duration
+	MinStartOffset   uint64
+	InitTime         time.Duration
+	SourceStoreURL   string
 }
 
 type App struct {
@@ -62,13 +59,11 @@ func New(config *Config) *App {
 func (a *App) Run() error {
 	dmetrics.Register(metrics.MetricSet)
 
-	if a.config.EnableReadinessProbe {
-		gs, err := dgrpc.NewInternalClient(a.config.GRPCListenAddr)
-		if err != nil {
-			return fmt.Errorf("cannot create readiness probe")
-		}
-		a.readinessProbe = pbhealth.NewHealthClient(gs)
+	gs, err := dgrpc.NewInternalClient(a.config.GRPCListenAddr)
+	if err != nil {
+		return fmt.Errorf("cannot create readiness probe")
 	}
+	a.readinessProbe = pbhealth.NewHealthClient(gs)
 
 	rlayer := relayer.NewRelayer(a.config.SourcesAddr, a.config.MergerAddr, a.config.MaxSourceLatency, a.config.GRPCListenAddr, a.config.MaxDrift, a.config.BufferSize)
 	startBlockReady := make(chan uint64)

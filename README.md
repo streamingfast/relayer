@@ -1,13 +1,35 @@
-## Goal
+# dfuse Relayer
 
-Read blocks from mindreader (which has a WS endpoint, pushing blocks
-blindly), and fan out to more websocket subscribers, with deduping and
-buffering for quick ramp-up of `eosws`  (or other) consuming nodes. the
-deduping+buffering should be done with a forkdb to prevent weird races
+[![reference](https://img.shields.io/badge/godoc-reference-5272B4.svg?style=flat-square)](https://pkg.go.dev/github.com/dfuse-io/relayer)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-## depends on
-* bstream websocket source to different mindreader endpoints
-* bstream multiplexedSource to manage them
-* bstream joiner (eternal) to get blocks from files and quickly find a valid longest chain up to lib
-* bstream forkable + filter on "new" blocks only
-* bstream blockServer to serve blocks (with a buffer)
+The relayer process fans out and propagates blocks from instrumented
+blockchain nodes, down to services, serving as a redundant and
+highly-available access to streaming block & transaction data.
+It is part of **[dfuse](https://github.com/dfuse-io/dfuse)**.
+
+## Installation & Usage
+
+See the different protocol-specific `dfuse` binaries at https://github.com/dfuse-io/dfuse#protocols
+
+Current implementations:
+
+* [**dfuse for EOSIO**](https://github.com/dfuse-io/dfuse-eosio)
+* **dfuse for Ethereum**, soon to be open sourced
+
+
+## Contributing
+
+**Issues and PR in this repo related strictly to the relayer functionalities**
+
+Report any protocol-specific issues in their
+[respective repositories](https://github.com/dfuse-io/dfuse#protocols)
+
+**Please first refer to the general
+[dfuse contribution guide](https://github.com/dfuse-io/dfuse/blob/master/CONTRIBUTING.md)**,
+if you wish to contribute to this code base.
+
+
+## License
+
+[Apache 2.0](LICENSE)
