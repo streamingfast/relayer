@@ -18,15 +18,7 @@ import (
 	"github.com/dfuse-io/dmetrics"
 )
 
-var metricset = dmetrics.NewSet()
+var MetricSet = dmetrics.NewSet()
 
-var HeadBlockTimeDrift = metricset.NewHeadTimeDrift("relayer")
-var HeadBlockNumber = metricset.NewHeadBlockNumber("relayer")
-
-func ServeMetrics() {
-	dmetrics.Serve(":9102")
-}
-
-func init() {
-	metricset.Register()
-}
+var HeadBlockTimeDrift = MetricSet.NewHeadTimeDrift("relayer")
+var HeadBlockNumber = MetricSet.NewHeadBlockNumber("relayer")

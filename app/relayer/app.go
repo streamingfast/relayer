@@ -20,10 +20,12 @@ import (
 	"time"
 
 	"github.com/dfuse-io/dgrpc"
+	"github.com/dfuse-io/dmetrics"
 	"github.com/dfuse-io/dstore"
 	pbbstream "github.com/dfuse-io/pbgo/dfuse/bstream/v1"
 	pbhealth "github.com/dfuse-io/pbgo/grpc/health/v1"
 	"github.com/dfuse-io/relayer"
+	"github.com/dfuse-io/relayer/metrics"
 	"github.com/dfuse-io/shutter"
 	"go.uber.org/zap"
 )
@@ -58,6 +60,7 @@ func New(config *Config) *App {
 }
 
 func (a *App) Run() error {
+	dmetrics.Register(metrics.MetricSet)
 
 	if a.config.EnableReadinessProbe {
 		gs, err := dgrpc.NewInternalClient(a.config.GRPCListenAddr)
