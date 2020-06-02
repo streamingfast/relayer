@@ -261,6 +261,11 @@ func (r *Relayer) StartRelayingBlocks(startBlockReady chan uint64, blockStore ds
 }
 
 func (r *Relayer) monitorDrift(driftMonitorDelay time.Duration) {
+	if r.maxDriftTolerance == 0 {
+		zlog.Info("max drift tolerance is set to 0, so we never shutdown due to excessive drifting, not monitoring drift")
+		return
+	}
+
 	// prevent shutting down too soon if joining took too long, which happens depending on live headblock vs file boundaries
 	<-time.After(driftMonitorDelay)
 	zlog.Info("now monitoring drift", zap.Duration("max_drift", r.maxDriftTolerance))
