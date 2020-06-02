@@ -8,7 +8,8 @@ require (
 	github.com/dfuse-io/logging v0.0.0-20200407175011-14021b7a79af
 	github.com/dfuse-io/pbgo v0.0.6-0.20200602201455-99986ef5a09d
 	github.com/dfuse-io/shutter v1.4.1-0.20200319040708-c809eec458e6
-	github.com/golang/protobuf v1.4.2
+	github.com/golang/protobuf v1.3.5
+	github.com/google/go-cmp v0.4.0 // indirect
 	go.uber.org/zap v1.14.0
 	google.golang.org/grpc v1.26.0
 )
