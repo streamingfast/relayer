@@ -70,12 +70,12 @@ func calculateDesiredStartBlock(head, lib uint64, minOffsetToHead uint64) uint64
 		if lib > minOffsetToHead {
 			return lib
 		}
-		return 2
+		return bstream.GetProtocolFirstStreamableBlock
 	}
 	if head > minOffsetToHead {
 		return head - minOffsetToHead
 	}
-	return 2
+	return bstream.GetProtocolFirstStreamableBlock
 }
 
 func (r *Relayer) PollSourceHeadUntilReady(readyStartBlock chan uint64, maxSourceLatency time.Duration, minOffsetToHead uint64) {
