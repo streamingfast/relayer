@@ -239,7 +239,7 @@ func (r *Relayer) StartRelayingBlocks(startBlockReady chan uint64, blockStore ds
 		return bstream.NewFileSource(blockStore, startBlock, 2, nil, subHandler)
 	})
 
-	js := bstream.NewJoiningSource(fileSourceFactory, r.newMultiplexedSource, gate, bstream.JoiningSourceMergerAddr(r.mergerAddr), bstream.JoiningSourceTargetBlockNum(2), bstream.JoiningSourceName("relayer"))
+	js := bstream.NewJoiningSource(fileSourceFactory, r.newMultiplexedSource, gate, bstream.JoiningSourceMergerAddr(r.mergerAddr), bstream.JoiningSourceTargetBlockNum(bstream.GetProtocolFirstStreamableBlock), bstream.JoiningSourceName("relayer"))
 	zlog.Info("new joining source with", zap.Uint64("start_block_num", startBlock))
 
 	r.source = js
