@@ -70,12 +70,12 @@ func calculateDesiredStartBlock(head, lib uint64, minOffsetToHead uint64) uint64
 		if lib > minOffsetToHead {
 			return lib
 		}
-		return 2
+		return bstream.GetProtocolFirstStreamableBlock
 	}
 	if head > minOffsetToHead {
 		return head - minOffsetToHead
 	}
-	return 2
+	return bstream.GetProtocolFirstStreamableBlock
 }
 
 func (r *Relayer) PollSourceHeadUntilReady(readyStartBlock chan uint64, maxSourceLatency time.Duration, minOffsetToHead uint64) {
@@ -239,7 +239,7 @@ func (r *Relayer) StartRelayingBlocks(startBlockReady chan uint64, blockStore ds
 		return bstream.NewFileSource(blockStore, startBlock, 2, nil, subHandler)
 	})
 
-	js := bstream.NewJoiningSource(fileSourceFactory, r.newMultiplexedSource, gate, bstream.JoiningSourceMergerAddr(r.mergerAddr), bstream.JoiningSourceTargetBlockNum(2), bstream.JoiningSourceName("relayer"))
+	js := bstream.NewJoiningSource(fileSourceFactory, r.newMultiplexedSource, gate, bstream.JoiningSourceMergerAddr(r.mergerAddr), bstream.JoiningSourceTargetBlockNum(bstream.GetProtocolFirstStreamableBlock), bstream.JoiningSourceName("relayer"))
 	zlog.Info("new joining source with", zap.Uint64("start_block_num", startBlock))
 
 	r.source = js
