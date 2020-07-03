@@ -1,7 +1,7 @@
 module github.com/dfuse-io/relayer
 
 require (
-	github.com/dfuse-io/bstream v0.0.2-0.20200703175051-2c07c37eb944
+	github.com/dfuse-io/bstream v0.0.2-0.20200703210323-f92a36d42ed3
 	github.com/dfuse-io/dgrpc v0.0.0-20200406214416-6271093e544c
 	github.com/dfuse-io/dmetrics v0.0.0-20200406214800-499fc7b320ab
 	github.com/dfuse-io/dstore v0.1.0
