@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/dfuse-io/bstream"
 	"github.com/dfuse-io/dgrpc"
 	"github.com/dfuse-io/dmetrics"
 	"github.com/dfuse-io/dstore"
@@ -43,16 +44,22 @@ type Config struct {
 	SourceStoreURL   string
 }
 
+type Modules struct {
+	BlockFilter func(blk *bstream.Block) error
+}
+
 type App struct {
 	*shutter.Shutter
 	config         *Config
+	modules        *Modules
 	readinessProbe pbhealth.HealthClient
 }
 
-func New(config *Config) *App {
+func New(config *Config, modules *Modules) *App {
 	return &App{
 		Shutter: shutter.New(),
 		config:  config,
+		modules: modules,
 	}
 }
 
@@ -65,7 +72,15 @@ func (a *App) Run() error {
 	}
 	a.readinessProbe = pbhealth.NewHealthClient(gs)
 
-	rlayer := relayer.NewRelayer(a.config.SourcesAddr, a.config.MergerAddr, a.config.MaxSourceLatency, a.config.GRPCListenAddr, a.config.MaxDrift, a.config.BufferSize)
+	rlayer := relayer.NewRelayer(
+		a.modules.BlockFilter,
+		a.config.SourcesAddr,
+		a.config.MergerAddr,
+		a.config.MaxSourceLatency,
+		a.config.GRPCListenAddr,
+		a.config.MaxDrift,
+		a.config.BufferSize,
+	)
 	startBlockReady := make(chan uint64)
 	go rlayer.PollSourceHeadUntilReady(startBlockReady, a.config.MaxSourceLatency, a.config.MinStartOffset)
 

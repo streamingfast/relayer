@@ -37,6 +37,7 @@ import (
 type Relayer struct {
 	*shutter.Shutter
 
+	blockFilter         func(blk *bstream.Block) error
 	sourceAddresses     []string
 	mergerAddr          string
 	ready               bool
@@ -48,9 +49,10 @@ type Relayer struct {
 	lastSentBlockAtUnix int64 // Shared-state between threads (only read / mutate using atomic. primitives)
 }
 
-func NewRelayer(sourceAddresses []string, mergerAddr string, maxSourceLatency time.Duration, grpcListenAddr string, maxDriftTolerance time.Duration, bufferSize int) *Relayer {
+func NewRelayer(blockFilter func(blk *bstream.Block) error, sourceAddresses []string, mergerAddr string, maxSourceLatency time.Duration, grpcListenAddr string, maxDriftTolerance time.Duration, bufferSize int) *Relayer {
 	r := &Relayer{
 		Shutter:           shutter.New(),
+		blockFilter:       blockFilter,
 		sourceAddresses:   sourceAddresses,
 		mergerAddr:        mergerAddr,
 		maxSourceLatency:  maxSourceLatency,
@@ -123,12 +125,12 @@ func (r *Relayer) PollSourceHeadUntilReady(readyStartBlock chan uint64, maxSourc
 
 func (r *Relayer) fetchHighestHeadInfo() (headInfo *pbheadinfo.HeadInfoResponse) {
 	for _, addr := range r.sourceAddresses {
-
 		conn, err := dgrpc.NewInternalClient(addr)
 		if err != nil {
 			zlog.Info("cannot connect to backend", zap.String("address", addr))
 			continue
 		}
+
 		headinfoCli := pbheadinfo.NewHeadInfoClient(conn)
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
@@ -151,9 +153,6 @@ func (r *Relayer) SetupBlockStreamServer(bufferSize int) {
 	r.blockStreamServer = blockstream.NewBufferedServer(gs, bufferSize)
 }
 
-func (r *Relayer) BuildPipeline(startBlock uint64, blockStore dstore.Store) {
-}
-
 func (r *Relayer) Drift() time.Duration {
 	lastSentBlockAtTime := time.Unix(atomic.LoadInt64(&r.lastSentBlockAtUnix), 0)
 	if lastSentBlockAtTime.IsZero() {
@@ -173,7 +172,17 @@ func (r *Relayer) newMultiplexedSource(handler bstream.Handler) bstream.Source {
 		sf := func(subHandler bstream.Handler) bstream.Source {
 			gate := bstream.NewRealtimeGate(r.maxSourceLatency, subHandler)
 			gate.SetName("relayer_live_source: " + u)
-			src := blockstream.NewSource(ctx, u, 0, gate)
+
+			upstreamHandler := bstream.Handler(gate)
+			if r.blockFilter != nil {
+				// When the block filter is present, we use it to filter block received from the source. We put
+				// it at the nearest point of received blocks so blocks flowing in-process's memory are lightweight.
+				upstreamHandler = bstream.NewPreprocessor(func(blk *bstream.Block) (interface{}, error) {
+					return nil, r.blockFilter(blk)
+				}, gate)
+			}
+
+			src := blockstream.NewSource(ctx, u, 0, upstreamHandler)
 			src.SetName(u)
 			return src
 		}
@@ -235,8 +244,15 @@ func (r *Relayer) StartRelayingBlocks(startBlockReady chan uint64, blockStore ds
 
 	gate := bstream.NewBlockNumGate(startBlock, bstream.GateInclusive, forkableHandler)
 
+	var filterPreprocessFunc bstream.PreprocessFunc
+	if r.blockFilter != nil {
+		filterPreprocessFunc = func(blk *bstream.Block) (interface{}, error) {
+			return nil, r.blockFilter(blk)
+		}
+	}
+
 	fileSourceFactory := bstream.SourceFactory(func(subHandler bstream.Handler) bstream.Source {
-		return bstream.NewFileSource(blockStore, startBlock, 2, nil, subHandler)
+		return bstream.NewFileSource(blockStore, startBlock, 2, filterPreprocessFunc, subHandler)
 	})
 
 	js := bstream.NewJoiningSource(fileSourceFactory, r.newMultiplexedSource, gate, bstream.JoiningSourceMergerAddr(r.mergerAddr), bstream.JoiningSourceTargetBlockNum(bstream.GetProtocolFirstStreamableBlock), bstream.JoiningSourceName("relayer"))
