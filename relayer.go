@@ -17,6 +17,7 @@ package relayer
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -62,7 +63,7 @@ func NewRelayer(blockFilter func(blk *bstream.Block) error, sourceAddresses []st
 
 	gs := dgrpc.NewServer()
 	pbhealth.RegisterHealthServer(gs, r)
-	r.blockStreamServer = blockstream.NewBufferedServer(gs, bufferSize)
+	r.blockStreamServer = blockstream.NewBufferedServer(gs, bufferSize, blockstream.ServerOptionWithLogger(zlog))
 	return r
 
 }
@@ -150,7 +151,7 @@ func (r *Relayer) fetchHighestHeadInfo() (headInfo *pbheadinfo.HeadInfoResponse)
 func (r *Relayer) SetupBlockStreamServer(bufferSize int) {
 	gs := dgrpc.NewServer()
 	pbhealth.RegisterHealthServer(gs, r)
-	r.blockStreamServer = blockstream.NewBufferedServer(gs, bufferSize)
+	r.blockStreamServer = blockstream.NewBufferedServer(gs, bufferSize, blockstream.ServerOptionWithLogger(zlog))
 }
 
 func (r *Relayer) Drift() time.Duration {
@@ -169,7 +170,7 @@ func (r *Relayer) newMultiplexedSource(handler bstream.Handler) bstream.Source {
 	for _, url := range r.sourceAddresses {
 		u := url // https://github.com/golang/go/wiki/CommonMistakes
 
-		logger := zlog.Named(u)
+		logger := zlog.Named("src").Named(urlToLoggerName(u))
 		sf := func(subHandler bstream.Handler) bstream.Source {
 			gate := bstream.NewRealtimeGate(r.maxSourceLatency, subHandler, bstream.GateOptionWithLogger(logger))
 
@@ -182,7 +183,7 @@ func (r *Relayer) newMultiplexedSource(handler bstream.Handler) bstream.Source {
 				}, gate)
 			}
 
-			src := blockstream.NewSource(ctx, u, 0, upstreamHandler, blockstream.WithLogger(logger))
+			src := blockstream.NewSource(ctx, u, 0, upstreamHandler, blockstream.WithLogger(logger), blockstream.WithRequester("relayer"))
 			return src
 		}
 		sourceFactories = append(sourceFactories, sf)
@@ -190,6 +191,11 @@ func (r *Relayer) newMultiplexedSource(handler bstream.Handler) bstream.Source {
 
 	return bstream.NewMultiplexedSource(sourceFactories, handler, bstream.MultiplexedSourceWithLogger(zlog))
 }
+
+func urlToLoggerName(url string) string {
+	return strings.TrimPrefix(url, ":")
+}
+
 func (r *Relayer) StartRelayingBlocks(startBlockReady chan uint64, blockStore dstore.Store, driftMonitorDelay time.Duration) {
 	/*
 
@@ -258,6 +264,7 @@ func (r *Relayer) StartRelayingBlocks(startBlockReady chan uint64, blockStore ds
 		bstream.JoiningSourceLogger(zlog),
 		bstream.JoiningSourceMergerAddr(r.mergerAddr),
 		bstream.JoiningSourceTargetBlockNum(bstream.GetProtocolFirstStreamableBlock),
+		bstream.JoiningSourceLiveTracker(200, r.sourcesBlockRefGetter()),
 	)
 	zlog.Info("new joining source with", zap.Uint64("start_block_num", startBlock))
 
@@ -277,6 +284,14 @@ func (r *Relayer) StartRelayingBlocks(startBlockReady chan uint64, blockStore ds
 	err := r.source.Err()
 	zlog.Debug("shutting down relayer because source was shut down", zap.Error(err))
 	r.Shutdown(err)
+}
+
+func (r *Relayer) sourcesBlockRefGetter() bstream.BlockRefGetter {
+	var getters []bstream.BlockRefGetter
+	for _, mindreaderAddr := range r.sourceAddresses {
+		getters = append(getters, bstream.HeadBlockRefGetter(mindreaderAddr))
+	}
+	return bstream.HighestBlockRefGetter(getters...)
 }
 
 func (r *Relayer) monitorDrift(driftMonitorDelay time.Duration) {

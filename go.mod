@@ -1,7 +1,7 @@
 module github.com/dfuse-io/relayer
 
 require (
-	github.com/dfuse-io/bstream v0.0.2-0.20200707115638-3b28f825568e
+	github.com/dfuse-io/bstream v0.0.2-0.20200707183302-64e1a90497ea
 	github.com/dfuse-io/dgrpc v0.0.0-20200406214416-6271093e544c
 	github.com/dfuse-io/dmetrics v0.0.0-20200406214800-499fc7b320ab
 	github.com/dfuse-io/dstore v0.1.0
@@ -15,4 +15,3 @@ require (
 )
 
 go 1.13
-replace github.com/dfuse-io/bstream => /Users/maoueh/work/dfuse/bstream
