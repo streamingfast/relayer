@@ -169,9 +169,9 @@ func (r *Relayer) newMultiplexedSource(handler bstream.Handler) bstream.Source {
 	for _, url := range r.sourceAddresses {
 		u := url // https://github.com/golang/go/wiki/CommonMistakes
 
+		logger := zlog.Named(u)
 		sf := func(subHandler bstream.Handler) bstream.Source {
-			gate := bstream.NewRealtimeGate(r.maxSourceLatency, subHandler)
-			gate.SetName("relayer_live_source: " + u)
+			gate := bstream.NewRealtimeGate(r.maxSourceLatency, subHandler, bstream.GateOptionWithLogger(logger))
 
 			upstreamHandler := bstream.Handler(gate)
 			if r.blockFilter != nil {
@@ -182,14 +182,13 @@ func (r *Relayer) newMultiplexedSource(handler bstream.Handler) bstream.Source {
 				}, gate)
 			}
 
-			src := blockstream.NewSource(ctx, u, 0, upstreamHandler)
-			src.SetName(u)
+			src := blockstream.NewSource(ctx, u, 0, upstreamHandler, blockstream.WithLogger(logger))
 			return src
 		}
 		sourceFactories = append(sourceFactories, sf)
 	}
 
-	return bstream.NewMultiplexedSource(sourceFactories, handler)
+	return bstream.NewMultiplexedSource(sourceFactories, handler, bstream.MultiplexedSourceWithLogger(zlog))
 }
 func (r *Relayer) StartRelayingBlocks(startBlockReady chan uint64, blockStore dstore.Store, driftMonitorDelay time.Duration) {
 	/*
@@ -237,12 +236,12 @@ func (r *Relayer) StartRelayingBlocks(startBlockReady chan uint64, blockStore ds
 	})
 
 	forkableHandler := forkable.New(pipe,
+		forkable.WithLogger(zlog),
 		forkable.WithFilters(forkable.StepNew),
 		forkable.EnsureAllBlocksTriggerLongestChain(),
-		forkable.WithName("relayer"),
 	)
 
-	gate := bstream.NewBlockNumGate(startBlock, bstream.GateInclusive, forkableHandler)
+	gate := bstream.NewBlockNumGate(startBlock, bstream.GateInclusive, forkableHandler, bstream.GateOptionWithLogger(zlog))
 
 	var filterPreprocessFunc bstream.PreprocessFunc
 	if r.blockFilter != nil {
@@ -255,7 +254,11 @@ func (r *Relayer) StartRelayingBlocks(startBlockReady chan uint64, blockStore ds
 		return bstream.NewFileSource(blockStore, startBlock, 2, filterPreprocessFunc, subHandler)
 	})
 
-	js := bstream.NewJoiningSource(fileSourceFactory, r.newMultiplexedSource, gate, zlog, bstream.JoiningSourceMergerAddr(r.mergerAddr), bstream.JoiningSourceTargetBlockNum(bstream.GetProtocolFirstStreamableBlock), bstream.JoiningSourceName("relayer"))
+	js := bstream.NewJoiningSource(fileSourceFactory, r.newMultiplexedSource, gate,
+		bstream.JoiningSourceLogger(zlog),
+		bstream.JoiningSourceMergerAddr(r.mergerAddr),
+		bstream.JoiningSourceTargetBlockNum(bstream.GetProtocolFirstStreamableBlock),
+	)
 	zlog.Info("new joining source with", zap.Uint64("start_block_num", startBlock))
 
 	r.source = js

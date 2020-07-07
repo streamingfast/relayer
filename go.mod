@@ -15,3 +15,4 @@ require (
 )
 
 go 1.13
+replace github.com/dfuse-io/bstream => /Users/maoueh/work/dfuse/bstream
