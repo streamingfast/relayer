@@ -289,7 +289,7 @@ func (r *Relayer) StartRelayingBlocks(startBlockReady chan uint64, blockStore ds
 func (r *Relayer) sourcesBlockRefGetter() bstream.BlockRefGetter {
 	var getters []bstream.BlockRefGetter
 	for _, mindreaderAddr := range r.sourceAddresses {
-		getters = append(getters, bstream.HeadBlockRefGetter(mindreaderAddr))
+		getters = append(getters, bstream.StreamHeadBlockRefGetter(mindreaderAddr))
 	}
 	return bstream.HighestBlockRefGetter(getters...)
 }
