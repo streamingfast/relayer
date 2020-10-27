@@ -33,15 +33,31 @@ import (
 var RelayerStartAborted = fmt.Errorf("getting start block aborted by relayer application terminating signal")
 
 type Config struct {
-	SourcesAddr      []string
-	GRPCListenAddr   string
-	MergerAddr       string
-	BufferSize       int
-	MaxDrift         time.Duration
-	MaxSourceLatency time.Duration
-	MinStartOffset   uint64
-	InitTime         time.Duration
-	SourceStoreURL   string
+	SourcesAddr        []string
+	GRPCListenAddr     string
+	MergerAddr         string
+	BufferSize         int
+	MaxDrift           time.Duration
+	SourceRequestBurst int
+	MaxSourceLatency   time.Duration
+	MinStartOffset     uint64
+	InitTime           time.Duration
+	SourceStoreURL     string
+}
+
+func (c *Config) ZapFields() []zap.Field {
+	return []zap.Field{
+		zap.Strings("sources_addr", c.SourcesAddr),
+		zap.String("grpc_listen_addr", c.GRPCListenAddr),
+		zap.String("merger_addr", c.MergerAddr),
+		zap.Int("buffer_size", c.BufferSize),
+		zap.Duration("max_drift", c.MaxDrift),
+		zap.Int("source_request_burst", c.SourceRequestBurst),
+		zap.Duration("max_source_latency", c.MaxSourceLatency),
+		zap.Uint64("min_start_offset", c.MinStartOffset),
+		zap.Duration("init_time", c.InitTime),
+		zap.String("source_store_url", c.SourceStoreURL),
+	}
 }
 
 type Modules struct {
@@ -66,6 +82,7 @@ func New(config *Config, modules *Modules) *App {
 func (a *App) Run() error {
 	dmetrics.Register(metrics.MetricSet)
 
+	zlog.Info("starting relayer", a.config.ZapFields()...)
 	gs, err := dgrpc.NewInternalClient(a.config.GRPCListenAddr)
 	if err != nil {
 		return fmt.Errorf("cannot create readiness probe")
@@ -80,6 +97,7 @@ func (a *App) Run() error {
 		a.config.GRPCListenAddr,
 		a.config.MaxDrift,
 		a.config.BufferSize,
+		a.config.SourceRequestBurst,
 	)
 	startBlockReady := make(chan uint64)
 	go rlayer.PollSourceHeadUntilReady(startBlockReady, a.config.MaxSourceLatency, a.config.MinStartOffset)

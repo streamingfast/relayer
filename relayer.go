@@ -44,21 +44,23 @@ type Relayer struct {
 	ready               bool
 	source              bstream.Source
 	maxSourceLatency    time.Duration
+	sourceRequestBurst  int64
 	grpcListenAddr      string
 	blockStreamServer   *blockstream.Server
 	maxDriftTolerance   time.Duration
 	lastSentBlockAtUnix int64 // Shared-state between threads (only read / mutate using atomic. primitives)
 }
 
-func NewRelayer(blockFilter func(blk *bstream.Block) error, sourceAddresses []string, mergerAddr string, maxSourceLatency time.Duration, grpcListenAddr string, maxDriftTolerance time.Duration, bufferSize int) *Relayer {
+func NewRelayer(blockFilter func(blk *bstream.Block) error, sourceAddresses []string, mergerAddr string, maxSourceLatency time.Duration, grpcListenAddr string, maxDriftTolerance time.Duration, bufferSize, sourceRequestBurst int) *Relayer {
 	r := &Relayer{
-		Shutter:           shutter.New(),
-		blockFilter:       blockFilter,
-		sourceAddresses:   sourceAddresses,
-		mergerAddr:        mergerAddr,
-		maxSourceLatency:  maxSourceLatency,
-		grpcListenAddr:    grpcListenAddr,
-		maxDriftTolerance: maxDriftTolerance,
+		Shutter:            shutter.New(),
+		blockFilter:        blockFilter,
+		sourceAddresses:    sourceAddresses,
+		mergerAddr:         mergerAddr,
+		maxSourceLatency:   maxSourceLatency,
+		grpcListenAddr:     grpcListenAddr,
+		maxDriftTolerance:  maxDriftTolerance,
+		sourceRequestBurst: int64(sourceRequestBurst),
 	}
 
 	gs := dgrpc.NewServer()
@@ -183,7 +185,7 @@ func (r *Relayer) newMultiplexedSource(handler bstream.Handler) bstream.Source {
 				}, gate)
 			}
 
-			src := blockstream.NewSource(ctx, u, 0, upstreamHandler, blockstream.WithLogger(logger), blockstream.WithRequester("relayer"))
+			src := blockstream.NewSource(ctx, u, r.sourceRequestBurst, upstreamHandler, blockstream.WithLogger(logger), blockstream.WithRequester("relayer"))
 			return src
 		}
 		sourceFactories = append(sourceFactories, sf)
