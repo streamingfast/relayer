@@ -18,7 +18,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync/atomic"
+	"sync"
 	"time"
 
 	"github.com/dfuse-io/bstream"
@@ -38,29 +38,33 @@ import (
 type Relayer struct {
 	*shutter.Shutter
 
-	blockFilter         func(blk *bstream.Block) error
-	sourceAddresses     []string
-	mergerAddr          string
-	ready               bool
-	source              bstream.Source
-	maxSourceLatency    time.Duration
-	sourceRequestBurst  int64
-	grpcListenAddr      string
-	blockStreamServer   *blockstream.Server
-	maxDriftTolerance   time.Duration
-	lastSentBlockAtUnix int64 // Shared-state between threads (only read / mutate using atomic. primitives)
+	blockFilter          func(blk *bstream.Block) error
+	sourceAddresses      []string
+	mergerAddr           string
+	ready                bool
+	source               bstream.Source
+	restartEternalSource func()
+	maxSourceLatency     time.Duration
+	sourceRequestBurst   int64
+	grpcListenAddr       string
+	blockStreamServer    *blockstream.Server
+
+	lastBlockMutex          sync.Mutex
+	lastBlockSentTime       time.Time
+	highestSentBlockRef     bstream.BlockRef // use this cause eternalsource does not see *after* the forkable
+	highestReceivedBlockNum uint64           // use this to compare if highestReceivedBlockNum>lastSentBlockRef by more than 1, then maxWaitTime is considered...
 }
 
-func NewRelayer(blockFilter func(blk *bstream.Block) error, sourceAddresses []string, mergerAddr string, maxSourceLatency time.Duration, grpcListenAddr string, maxDriftTolerance time.Duration, bufferSize, sourceRequestBurst int) *Relayer {
+func NewRelayer(blockFilter func(blk *bstream.Block) error, sourceAddresses []string, mergerAddr string, maxSourceLatency time.Duration, grpcListenAddr string, bufferSize, sourceRequestBurst int) *Relayer {
 	r := &Relayer{
-		Shutter:            shutter.New(),
-		blockFilter:        blockFilter,
-		sourceAddresses:    sourceAddresses,
-		mergerAddr:         mergerAddr,
-		maxSourceLatency:   maxSourceLatency,
-		grpcListenAddr:     grpcListenAddr,
-		maxDriftTolerance:  maxDriftTolerance,
-		sourceRequestBurst: int64(sourceRequestBurst),
+		Shutter:             shutter.New(),
+		blockFilter:         blockFilter,
+		sourceAddresses:     sourceAddresses,
+		mergerAddr:          mergerAddr,
+		maxSourceLatency:    maxSourceLatency,
+		grpcListenAddr:      grpcListenAddr,
+		sourceRequestBurst:  int64(sourceRequestBurst),
+		highestSentBlockRef: bstream.BlockRefEmpty,
 	}
 
 	gs := dgrpc.NewServer()
@@ -156,13 +160,19 @@ func (r *Relayer) SetupBlockStreamServer(bufferSize int) {
 	r.blockStreamServer = blockstream.NewBufferedServer(gs, bufferSize, blockstream.ServerOptionWithLogger(zlog))
 }
 
-func (r *Relayer) Drift() time.Duration {
-	lastSentBlockAtTime := time.Unix(atomic.LoadInt64(&r.lastSentBlockAtUnix), 0)
-	if lastSentBlockAtTime.IsZero() {
-		return 0
+func (r *Relayer) blockHoleDetected() bool {
+	r.lastBlockMutex.Lock()
+	defer r.lastBlockMutex.Unlock()
+	if time.Since(r.lastBlockSentTime) < 5*time.Second { // allows small inconsistencies when reading initial buffers from different sources
+		return false
 	}
+	return r.highestSentBlockRef.Num() != 0 && r.highestReceivedBlockNum > (r.highestSentBlockRef.Num()+1)
+}
 
-	return time.Since(lastSentBlockAtTime)
+func (r *Relayer) resetBlockHoleMonitoring() {
+	r.lastBlockMutex.Lock()
+	defer r.lastBlockMutex.Unlock()
+	r.highestReceivedBlockNum = r.highestSentBlockRef.Num() //  we cheat a bit here
 }
 
 func (r *Relayer) newMultiplexedSource(handler bstream.Handler) bstream.Source {
@@ -198,7 +208,7 @@ func urlToLoggerName(url string) string {
 	return strings.TrimPrefix(url, ":")
 }
 
-func (r *Relayer) StartRelayingBlocks(startBlockReady chan uint64, blockStore dstore.Store, driftMonitorDelay time.Duration) {
+func (r *Relayer) StartRelayingBlocks(startBlockReady chan uint64, blockStore dstore.Store) {
 	/*
 
 			   Graph:
@@ -236,7 +246,14 @@ func (r *Relayer) StartRelayingBlocks(startBlockReady chan uint64, blockStore ds
 
 	pipe := bstream.HandlerFunc(func(blk *bstream.Block, obj interface{}) error {
 		zlog.Debug("publishing block", zap.Stringer("block", blk))
-		atomic.StoreInt64(&r.lastSentBlockAtUnix, time.Now().Unix())
+
+		r.lastBlockMutex.Lock()
+		if blk.Num() > r.highestSentBlockRef.Num() {
+			r.highestSentBlockRef = bstream.NewBlockRef(blk.ID(), blk.Num())
+			r.lastBlockSentTime = time.Now()
+		}
+		r.lastBlockMutex.Unlock()
+
 		metrics.HeadBlockTimeDrift.SetBlockTime(blk.Time())
 		metrics.HeadBlockNumber.SetUint64(blk.Num())
 
@@ -249,8 +266,6 @@ func (r *Relayer) StartRelayingBlocks(startBlockReady chan uint64, blockStore ds
 		forkable.EnsureAllBlocksTriggerLongestChain(),
 	)
 
-	gate := bstream.NewBlockNumGate(startBlock, bstream.GateInclusive, forkableHandler, bstream.GateOptionWithLogger(zlog))
-
 	var filterPreprocessFunc bstream.PreprocessFunc
 	if r.blockFilter != nil {
 		filterPreprocessFunc = func(blk *bstream.Block) (interface{}, error) {
@@ -258,19 +273,41 @@ func (r *Relayer) StartRelayingBlocks(startBlockReady chan uint64, blockStore ds
 		}
 	}
 
-	fileSourceFactory := bstream.SourceFactory(func(subHandler bstream.Handler) bstream.Source {
-		return bstream.NewFileSource(blockStore, startBlock, 2, filterPreprocessFunc, subHandler)
+	sf := bstream.SourceFromRefFactory(func(startBlockRef bstream.BlockRef, h bstream.Handler) bstream.Source {
+
+		jsOptions := []bstream.JoiningSourceOption{
+			bstream.JoiningSourceLogger(zlog),
+			bstream.JoiningSourceMergerAddr(r.mergerAddr),
+			bstream.JoiningSourceTargetBlockNum(bstream.GetProtocolFirstStreamableBlock),
+			bstream.JoiningSourceLiveTracker(200, r.sourcesBlockRefGetter()),
+		}
+
+		if startBlockRef != bstream.BlockRefEmpty {
+			startBlock = startBlockRef.Num()
+			jsOptions = append(jsOptions, bstream.JoiningSourceTargetBlockID(startBlockRef.ID()))
+		}
+
+		gate := bstream.NewBlockNumGate(startBlock, bstream.GateInclusive, h, bstream.GateOptionWithLogger(zlog))
+
+		fileSourceFactory := bstream.SourceFactory(func(subHandler bstream.Handler) bstream.Source {
+			return bstream.NewFileSource(blockStore, startBlock, 2, filterPreprocessFunc, subHandler)
+		})
+
+		zlog.Info("new joining source with", zap.Uint64("start_block_num", startBlock))
+		js := bstream.NewJoiningSource(fileSourceFactory, r.newMultiplexedSource, gate, jsOptions...)
+		go r.monitorBlockHole(func() { js.Shutdown(fmt.Errorf("hole detected in blocks")) }) // triggers eternalsource restart
+		return js
 	})
 
-	js := bstream.NewJoiningSource(fileSourceFactory, r.newMultiplexedSource, gate,
-		bstream.JoiningSourceLogger(zlog),
-		bstream.JoiningSourceMergerAddr(r.mergerAddr),
-		bstream.JoiningSourceTargetBlockNum(bstream.GetProtocolFirstStreamableBlock),
-		bstream.JoiningSourceLiveTracker(200, r.sourcesBlockRefGetter()),
-	)
-	zlog.Info("new joining source with", zap.Uint64("start_block_num", startBlock))
-
-	r.source = js
+	h := bstream.HandlerFunc(func(blk *bstream.Block, obj interface{}) error {
+		r.lastBlockMutex.Lock()
+		if blk.Number > r.highestReceivedBlockNum {
+			r.highestReceivedBlockNum = blk.Number
+		}
+		r.lastBlockMutex.Unlock()
+		return forkableHandler.ProcessBlock(blk, obj)
+	})
+	r.source = bstream.NewDelegatingEternalSource(sf, func() (bstream.BlockRef, error) { return r.highestSentBlockRef, nil }, h, bstream.EternalSourceWithLogger(zlog))
 
 	r.OnTerminating(func(e error) {
 		zlog.Info("shutting down source")
@@ -280,7 +317,6 @@ func (r *Relayer) StartRelayingBlocks(startBlockReady chan uint64, blockStore ds
 		r.blockStreamServer.Close()
 	})
 
-	go r.monitorDrift(driftMonitorDelay)
 	r.source.Run()
 
 	err := r.source.Err()
@@ -296,20 +332,13 @@ func (r *Relayer) sourcesBlockRefGetter() bstream.BlockRefGetter {
 	return bstream.HighestBlockRefGetter(getters...)
 }
 
-func (r *Relayer) monitorDrift(driftMonitorDelay time.Duration) {
-	if r.maxDriftTolerance == 0 {
-		zlog.Info("max drift tolerance is set to 0, so we never shutdown due to excessive drifting, not monitoring drift")
-		return
-	}
-
-	// prevent shutting down too soon if joining took too long, which happens depending on live headblock vs file boundaries
-	<-time.After(driftMonitorDelay)
-	zlog.Info("now monitoring drift", zap.Duration("max_drift", r.maxDriftTolerance))
+func (r *Relayer) monitorBlockHole(triggerRestart func()) {
 	for {
-		currentDrift := r.Drift()
-		if currentDrift > r.maxDriftTolerance {
-			r.Shutdown(fmt.Errorf("shutting down on relayer error, because drift exceeded tolerated maximum: current_drift: %d", currentDrift))
-		}
 		time.Sleep(1 * time.Second)
+		if r.blockHoleDetected() {
+			triggerRestart()
+			r.resetBlockHoleMonitoring()
+			return
+		}
 	}
 }

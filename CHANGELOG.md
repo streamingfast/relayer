@@ -5,8 +5,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Uncommitted]
 
-* add SourceRequestBurst to config, allows requesting a burst to each of the source (useful when connecting to another relayer)
+### Removed
+* `MaxDrift` config option removed
+* `InitTime` config option removed
+
+### Changed
+* "max-drift" mechanism modified to now detect "block hole", by expecting highest 'received' block never to be higher than highest 'sent' block + 1 (out of the forkable).
+* upon detection of a "block hole", instead of shutting down, the process will simply restart joining from block files from where it left off.
 * Now prints the whole config on start
+
+
+### Added
+* add SourceRequestBurst to config, allows requesting a burst to each of the source (useful when connecting to another relayer)
 
 ## [v0.0.1] 2020-06-23
 

@@ -37,11 +37,9 @@ type Config struct {
 	GRPCListenAddr     string
 	MergerAddr         string
 	BufferSize         int
-	MaxDrift           time.Duration
 	SourceRequestBurst int
 	MaxSourceLatency   time.Duration
 	MinStartOffset     uint64
-	InitTime           time.Duration
 	SourceStoreURL     string
 }
 
@@ -51,11 +49,9 @@ func (c *Config) ZapFields() []zap.Field {
 		zap.String("grpc_listen_addr", c.GRPCListenAddr),
 		zap.String("merger_addr", c.MergerAddr),
 		zap.Int("buffer_size", c.BufferSize),
-		zap.Duration("max_drift", c.MaxDrift),
 		zap.Int("source_request_burst", c.SourceRequestBurst),
 		zap.Duration("max_source_latency", c.MaxSourceLatency),
 		zap.Uint64("min_start_offset", c.MinStartOffset),
-		zap.Duration("init_time", c.InitTime),
 		zap.String("source_store_url", c.SourceStoreURL),
 	}
 }
@@ -95,7 +91,6 @@ func (a *App) Run() error {
 		a.config.MergerAddr,
 		a.config.MaxSourceLatency,
 		a.config.GRPCListenAddr,
-		a.config.MaxDrift,
 		a.config.BufferSize,
 		a.config.SourceRequestBurst,
 	)
@@ -111,7 +106,7 @@ func (a *App) Run() error {
 
 	a.OnTerminating(rlayer.Shutdown)
 	rlayer.OnTerminated(a.Shutdown)
-	go rlayer.StartRelayingBlocks(startBlockReady, blocksStore, a.config.InitTime)
+	go rlayer.StartRelayingBlocks(startBlockReady, blocksStore)
 
 	return nil
 }
