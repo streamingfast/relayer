@@ -166,7 +166,14 @@ func (r *Relayer) blockHoleDetected() bool {
 	if time.Since(r.lastBlockSentTime) < 5*time.Second { // allows small inconsistencies when reading initial buffers from different sources
 		return false
 	}
-	return r.highestSentBlockRef.Num() != 0 && r.highestReceivedBlockNum > (r.highestSentBlockRef.Num()+1)
+
+	detected := r.highestSentBlockRef.Num() != 0 && r.highestReceivedBlockNum > (r.highestSentBlockRef.Num()+1)
+
+	if detected {
+		zlog.Error("Found a hole in block seq [r.highestReceivedBlockNum > (r.highestSentBlockRef.Num()+1)]", zap.Uint64("highest_receive_block", r.highestReceivedBlockNum), zap.Uint64("highest_sent_block", r.highestSentBlockRef.Num()))
+	}
+
+	return detected
 }
 
 func (r *Relayer) resetBlockHoleMonitoring() {
