@@ -17,6 +17,7 @@ package relayer
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -34,6 +35,8 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 )
+
+var traceBlockSource = os.Getenv("TRACE_RELAYER_SOURCE") == "true"
 
 type Relayer struct {
 	*shutter.Shutter
@@ -189,11 +192,19 @@ func (r *Relayer) newMultiplexedSource(handler bstream.Handler) bstream.Source {
 	for _, url := range r.sourceAddresses {
 		u := url // https://github.com/golang/go/wiki/CommonMistakes
 
-		logger := zlog.Named("src").Named(urlToLoggerName(u))
+		sourceName := urlToLoggerName(u)
+		logger := zlog.Named("src").Named(sourceName)
 		sf := func(subHandler bstream.Handler) bstream.Source {
-			gate := bstream.NewRealtimeGate(r.maxSourceLatency, subHandler, bstream.GateOptionWithLogger(logger))
 
-			upstreamHandler := bstream.Handler(gate)
+			gate := bstream.NewRealtimeGate(r.maxSourceLatency, subHandler, bstream.GateOptionWithLogger(logger))
+			var upstreamHandler bstream.Handler
+			upstreamHandler = bstream.HandlerFunc(func(blk *bstream.Block, obj interface{}) error {
+				return gate.ProcessBlock(blk, &namedObj{
+					Obj:  obj,
+					Name: sourceName,
+				})
+			})
+
 			if r.blockFilter != nil {
 				// When the block filter is present, we use it to filter block received from the source. We put
 				// it at the nearest point of received blocks so blocks flowing in-process's memory are lightweight.
@@ -307,9 +318,18 @@ func (r *Relayer) StartRelayingBlocks(startBlockReady chan uint64, blockStore ds
 	})
 
 	h := bstream.HandlerFunc(func(blk *bstream.Block, obj interface{}) error {
+		sourceName := ""
+		if named, ok := obj.(*namedObj); ok {
+			obj = named.Obj
+			sourceName = named.Name
+		}
+
 		r.lastBlockMutex.Lock()
 		if blk.Number > r.highestReceivedBlockNum {
 			r.highestReceivedBlockNum = blk.Number
+			if traceBlockSource && sourceName != "" {
+				zlog.Info("received block", zap.String("source_name", sourceName), zap.Uint64("block_number", blk.Number))
+			}
 		}
 		r.lastBlockMutex.Unlock()
 		return forkableHandler.ProcessBlock(blk, obj)
@@ -348,4 +368,9 @@ func (r *Relayer) monitorBlockHole(triggerRestart func()) {
 			return
 		}
 	}
+}
+
+type namedObj struct {
+	Name string
+	Obj  interface{}
 }
