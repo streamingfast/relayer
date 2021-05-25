@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"github.com/dfuse-io/bstream"
-	"github.com/dfuse-io/dgrpc"
 	"github.com/dfuse-io/dmetrics"
 	"github.com/dfuse-io/dstore"
 	pbhealth "github.com/dfuse-io/pbgo/grpc/health/v1"
@@ -62,9 +61,10 @@ type Modules struct {
 
 type App struct {
 	*shutter.Shutter
-	config         *Config
-	modules        *Modules
-	readinessProbe pbhealth.HealthClient
+	config  *Config
+	modules *Modules
+
+	relayer *relayer.Relayer
 }
 
 func New(config *Config, modules *Modules) *App {
@@ -79,13 +79,7 @@ func (a *App) Run() error {
 	dmetrics.Register(metrics.MetricSet)
 
 	zlog.Info("starting relayer", a.config.ZapFields()...)
-	gs, err := dgrpc.NewInternalClient(a.config.GRPCListenAddr)
-	if err != nil {
-		return fmt.Errorf("cannot create readiness probe")
-	}
-	a.readinessProbe = pbhealth.NewHealthClient(gs)
-
-	rlayer := relayer.NewRelayer(
+	a.relayer = relayer.NewRelayer(
 		a.modules.BlockFilter,
 		a.config.SourcesAddr,
 		a.config.MergerAddr,
@@ -95,38 +89,34 @@ func (a *App) Run() error {
 		a.config.SourceRequestBurst,
 	)
 	startBlockReady := make(chan uint64)
-	go rlayer.PollSourceHeadUntilReady(startBlockReady, a.config.MaxSourceLatency, a.config.MinStartOffset)
+	go a.relayer.PollSourceHeadUntilReady(startBlockReady, a.config.MaxSourceLatency, a.config.MinStartOffset)
 
-	rlayer.StartListening(a.config.BufferSize)
+	a.relayer.StartListening(a.config.BufferSize)
 
 	blocksStore, err := dstore.NewDBinStore(a.config.SourceStoreURL)
 	if err != nil {
 		return fmt.Errorf("getting block store: %w", err)
 	}
 
-	a.OnTerminating(rlayer.Shutdown)
-	rlayer.OnTerminated(a.Shutdown)
-	go rlayer.StartRelayingBlocks(startBlockReady, blocksStore)
+	a.OnTerminating(a.relayer.Shutdown)
+	a.relayer.OnTerminated(a.Shutdown)
+	go a.relayer.StartRelayingBlocks(startBlockReady, blocksStore)
 
 	return nil
 }
 
+var emptyHealthCheckRequest = &pbhealth.HealthCheckRequest{}
+
 func (a *App) IsReady() bool {
-	if a.readinessProbe == nil {
+	if a.relayer == nil {
 		return false
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
-	resp, err := a.readinessProbe.Check(ctx, &pbhealth.HealthCheckRequest{})
+	resp, err := a.relayer.Check(context.Background(), emptyHealthCheckRequest)
 	if err != nil {
-		zlog.Info("merger readiness probe error", zap.Error(err))
+		zlog.Info("readiness check failed", zap.Error(err))
 		return false
 	}
 
-	if resp.Status == pbhealth.HealthCheckResponse_SERVING {
-		return true
-	}
-
-	return false
+	return resp.Status == pbhealth.HealthCheckResponse_SERVING
 }

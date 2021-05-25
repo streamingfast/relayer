@@ -36,6 +36,10 @@ import (
 	"google.golang.org/grpc"
 )
 
+const (
+	getHeadInfoTimeout = 10 * time.Second
+)
+
 var traceBlockSource = os.Getenv("TRACE_RELAYER_SOURCE") == "true"
 
 type Relayer struct {
@@ -153,7 +157,7 @@ func (r *Relayer) fetchHighestHeadInfo() (headInfo *pbheadinfo.HeadInfoResponse)
 			r.sourceConnCache[addr] = conn
 		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), getHeadInfoTimeout)
 		defer cancel()
 		remoteHead, err := headInfoClient.GetHeadInfo(ctx, &pbheadinfo.HeadInfoRequest{}, grpc.WaitForReady(false))
 		if err != nil || remoteHead == nil {
@@ -234,7 +238,7 @@ func (r *Relayer) newMultiplexedSource(handler bstream.Handler) bstream.Source {
 }
 
 func urlToLoggerName(url string) string {
-	return strings.TrimPrefix(url, ":")
+	return strings.TrimPrefix(strings.TrimPrefix(url, "dns:///"), ":")
 }
 
 func (r *Relayer) StartRelayingBlocks(startBlockReady chan uint64, blockStore dstore.Store) {
@@ -273,7 +277,7 @@ func (r *Relayer) StartRelayingBlocks(startBlockReady chan uint64, blockStore ds
 	case startBlock = <-startBlockReady:
 	}
 
-	pipe := bstream.HandlerFunc(func(blk *bstream.Block, obj interface{}) error {
+	pipe := bstream.HandlerFunc(func(blk *bstream.Block, _ interface{}) error {
 		zlog.Debug("publishing block", zap.Stringer("block", blk))
 
 		r.lastBlockMutex.Lock()
