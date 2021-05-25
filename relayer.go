@@ -56,18 +56,23 @@ type Relayer struct {
 	lastBlockSentTime       time.Time
 	highestSentBlockRef     bstream.BlockRef // use this cause eternalsource does not see *after* the forkable
 	highestReceivedBlockNum uint64           // use this to compare if highestReceivedBlockNum>lastSentBlockRef by more than 1, then maxWaitTime is considered...
+
+	sourceConnCache       map[string]*grpc.ClientConn
+	sourceHeadClientCache map[string]pbheadinfo.HeadInfoClient
 }
 
 func NewRelayer(blockFilter func(blk *bstream.Block) error, sourceAddresses []string, mergerAddr string, maxSourceLatency time.Duration, grpcListenAddr string, bufferSize, sourceRequestBurst int) *Relayer {
 	r := &Relayer{
-		Shutter:             shutter.New(),
-		blockFilter:         blockFilter,
-		sourceAddresses:     sourceAddresses,
-		mergerAddr:          mergerAddr,
-		maxSourceLatency:    maxSourceLatency,
-		grpcListenAddr:      grpcListenAddr,
-		sourceRequestBurst:  int64(sourceRequestBurst),
-		highestSentBlockRef: bstream.BlockRefEmpty,
+		Shutter:               shutter.New(),
+		blockFilter:           blockFilter,
+		sourceAddresses:       sourceAddresses,
+		mergerAddr:            mergerAddr,
+		maxSourceLatency:      maxSourceLatency,
+		grpcListenAddr:        grpcListenAddr,
+		sourceRequestBurst:    int64(sourceRequestBurst),
+		highestSentBlockRef:   bstream.BlockRefEmpty,
+		sourceConnCache:       make(map[string]*grpc.ClientConn),
+		sourceHeadClientCache: make(map[string]pbheadinfo.HeadInfoClient),
 	}
 
 	gs := dgrpc.NewServer()
@@ -135,16 +140,22 @@ func (r *Relayer) PollSourceHeadUntilReady(readyStartBlock chan uint64, maxSourc
 
 func (r *Relayer) fetchHighestHeadInfo() (headInfo *pbheadinfo.HeadInfoResponse) {
 	for _, addr := range r.sourceAddresses {
-		conn, err := dgrpc.NewInternalClient(addr)
-		if err != nil {
-			zlog.Info("cannot connect to backend", zap.String("address", addr))
-			continue
+		headInfoClient := r.sourceHeadClientCache[addr]
+		if headInfoClient == nil {
+			conn, err := dgrpc.NewInternalClient(addr)
+			if err != nil {
+				zlog.Info("cannot connect to backend", zap.String("address", addr))
+				continue
+			}
+
+			headInfoClient = pbheadinfo.NewHeadInfoClient(conn)
+			r.sourceHeadClientCache[addr] = headInfoClient
+			r.sourceConnCache[addr] = conn
 		}
 
-		headinfoCli := pbheadinfo.NewHeadInfoClient(conn)
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
-		remoteHead, err := headinfoCli.GetHeadInfo(ctx, &pbheadinfo.HeadInfoRequest{}, grpc.WaitForReady(false))
+		remoteHead, err := headInfoClient.GetHeadInfo(ctx, &pbheadinfo.HeadInfoRequest{}, grpc.WaitForReady(false))
 		if err != nil || remoteHead == nil {
 			zlog.Info("cannot get headinfo from backend", zap.String("address", addr), zap.Error(err))
 			continue
@@ -342,6 +353,13 @@ func (r *Relayer) StartRelayingBlocks(startBlockReady chan uint64, blockStore ds
 
 		zlog.Info("closing block stream server")
 		r.blockStreamServer.Close()
+	})
+
+	r.OnTerminated(func(_ error) {
+		zlog.Info("closing head info client(s)", zap.Int("conn_count", len(r.sourceConnCache)))
+		for _, conn := range r.sourceConnCache {
+			conn.Close()
+		}
 	})
 
 	r.source.Run()
