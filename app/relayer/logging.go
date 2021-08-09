@@ -22,5 +22,5 @@ import (
 var zlog *zap.Logger
 
 func init() {
-	logging.Register("github.com/dfuse-io/relayer/app/relayer", &zlog)
+	logging.Register("github.com/streamingfast/relayer/app/relayer", &zlog)
 }

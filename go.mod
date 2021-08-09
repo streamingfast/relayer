@@ -1,4 +1,4 @@
-module github.com/dfuse-io/relayer
+module github.com/streamingfast/relayer
 
 require (
 	github.com/dfuse-io/bstream v0.0.2-0.20200715185351-418dc70e2924
