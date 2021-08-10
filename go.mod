@@ -1,17 +1,24 @@
 module github.com/streamingfast/relayer
 
 require (
-	github.com/dfuse-io/bstream v0.0.2-0.20200715185351-418dc70e2924
-	github.com/dfuse-io/dgrpc v0.0.0-20200406214416-6271093e544c
+	github.com/dfuse-io/bstream v0.0.2-0.20210810112308-458fdfd5441b
+	github.com/dfuse-io/dbin v0.0.0-20200406215642-ec7f22e794eb // indirect
+	github.com/dfuse-io/dgrpc v0.0.0-20210128133958-db1ca95920e4
 	github.com/dfuse-io/dmetrics v0.0.0-20200406214800-499fc7b320ab
-	github.com/dfuse-io/dstore v0.1.0
-	github.com/dfuse-io/logging v0.0.0-20200407175011-14021b7a79af
-	github.com/dfuse-io/pbgo v0.0.6-0.20200602201455-99986ef5a09d
-	github.com/dfuse-io/shutter v1.4.1-0.20200319040708-c809eec458e6
+	github.com/dfuse-io/dstore v0.1.0 // indirect
+	github.com/dfuse-io/jsonpb v0.0.0-20200406211248-c5cf83f0e0c0 // indirect
+	github.com/dfuse-io/logging v0.0.0-20210109005628-b97a57253f70
+	github.com/dfuse-io/pbgo v0.0.6-0.20210429181308-d54fc7723ad3
+	github.com/dfuse-io/shutter v1.4.1
 	github.com/golang/protobuf v1.3.5
 	github.com/google/go-cmp v0.4.0 // indirect
-	go.uber.org/zap v1.14.0
-	google.golang.org/grpc v1.26.0
+	github.com/google/uuid v1.1.1 // indirect
+	github.com/rs/xid v1.2.1 // indirect
+	github.com/streamingfast/dstore v0.1.1-0.20210810110932-928f221474e4 // indirect
+	github.com/streamingfast/opaque v0.0.0-20210809210154-b964592beb5d // indirect
+	github.com/tidwall/gjson v1.5.0 // indirect
+	go.uber.org/zap v1.15.0
+	google.golang.org/grpc v1.29.1
 )
 
 go 1.13
