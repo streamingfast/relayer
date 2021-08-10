@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"github.com/dfuse-io/bstream"
-	"github.com/dfuse-io/dmetrics"
+	"github.com/streamingfast/dmetrics"
 	"github.com/streamingfast/dstore"
 	pbhealth "github.com/dfuse-io/pbgo/grpc/health/v1"
 	"github.com/streamingfast/shutter"
