@@ -29,7 +29,7 @@ import (
 	"github.com/streamingfast/dstore"
 	pbheadinfo "github.com/dfuse-io/pbgo/dfuse/headinfo/v1"
 	pbhealth "github.com/dfuse-io/pbgo/grpc/health/v1"
-	"github.com/dfuse-io/shutter"
+	"github.com/streamingfast/shutter"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/streamingfast/relayer/metrics"
 	"go.uber.org/zap"

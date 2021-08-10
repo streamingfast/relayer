@@ -23,7 +23,7 @@ import (
 	"github.com/dfuse-io/dmetrics"
 	"github.com/streamingfast/dstore"
 	pbhealth "github.com/dfuse-io/pbgo/grpc/health/v1"
-	"github.com/dfuse-io/shutter"
+	"github.com/streamingfast/shutter"
 	"github.com/streamingfast/relayer"
 	"github.com/streamingfast/relayer/metrics"
 	"go.uber.org/zap"
