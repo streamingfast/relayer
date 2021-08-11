@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/dfuse-io/bstream"
+	"github.com/streamingfast/bstream"
 	"github.com/streamingfast/dmetrics"
 	"github.com/streamingfast/dstore"
 	pbhealth "github.com/streamingfast/pbgo/grpc/health/v1"

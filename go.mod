@@ -1,7 +1,6 @@
 module github.com/streamingfast/relayer
 
 require (
-	github.com/dfuse-io/bstream v0.0.2-0.20210811160908-fc6cb0861d48
 	github.com/dfuse-io/dbin v0.0.0-20200406215642-ec7f22e794eb // indirect
 	github.com/dfuse-io/dgrpc v0.0.0-20210810041652-d033fee35ae0 // indirect
 	github.com/dfuse-io/dmetrics v0.0.0-20200406214800-499fc7b320ab // indirect
@@ -11,6 +10,7 @@ require (
 	github.com/golang/protobuf v1.3.5
 	github.com/google/uuid v1.1.1 // indirect
 	github.com/rs/xid v1.2.1 // indirect
+	github.com/streamingfast/bstream v0.0.2-0.20210811172811-82db64e6763f // indirect
 	github.com/streamingfast/dgrpc v0.0.0-20210811160823-a39dfa7fff0d
 	github.com/streamingfast/dmetrics v0.0.0-20210810172555-564d623b116f
 	github.com/streamingfast/dstore v0.1.1-0.20210810110932-928f221474e4
