@@ -446,7 +446,7 @@ func handleBlockFromMerger(logger *zap.Logger, blockNum uint64, blockID string, 
 		}
 
 		logger.Debug("receive pre merge block", zap.Uint64("block_num", resp.Block.Number), zap.String("block_id", resp.Block.Id))
-		nativeBlock, err := bstream.BlockFromProto(resp.Block)
+		nativeBlock, err := bstream.NewBlockFromProto(resp.Block)
 		if err != nil {
 			return fmt.Errorf("block from proto: %w", err)
 		}
