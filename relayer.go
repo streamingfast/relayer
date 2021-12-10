@@ -383,10 +383,10 @@ func (r *Relayer) StartRelayingBlocks(startBlockReady chan uint64, blockStore ds
 func (r *Relayer) FileSourceNotFoundCallBack() bstream.NotFoundCallbackFunc {
 	if r.mergerAddr != "" {
 
-		return func(nextBaseBlockNum uint64, highestFileProcessedBlock bstream.BlockRef, handler bstream.Handler, logger *zap.Logger) {
+		return func(nextBaseBlockNum uint64, highestFileProcessedBlock bstream.BlockRef, handler bstream.Handler, logger *zap.Logger) error {
 			targetJoinBlock := lowestIDInBufferGTE(nextBaseBlockNum, r.joiningSource.BufferRef())
 			if targetJoinBlock == nil {
-				return
+				return nil
 			}
 
 			err := handleBlockFromMerger(
@@ -399,10 +399,11 @@ func (r *Relayer) FileSourceNotFoundCallBack() bstream.NotFoundCallbackFunc {
 
 			if err != nil {
 				logger.Info("cannot join using merger source", zap.Error(err), zap.Stringer("target_join_block", targetJoinBlock))
-				return
+				return nil
 			}
 
 			logger.Info("launching source from merger", zap.Uint64("low_block_num", nextBaseBlockNum), zap.Stringer("target_join_block", targetJoinBlock))
+			return nil
 		}
 	}
 	return nil
