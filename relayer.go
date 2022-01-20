@@ -298,7 +298,7 @@ func (r *Relayer) StartRelayingBlocks(startBlockReady chan uint64, blockStore ds
 
 	forkableHandler := forkable.New(pipe,
 		forkable.WithLogger(zlog),
-		forkable.WithFilters(forkable.StepNew),
+		forkable.WithFilters(bstream.StepNew),
 		forkable.EnsureAllBlocksTriggerLongestChain(),
 	)
 

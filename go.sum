@@ -351,12 +351,16 @@ github.com/sirupsen/logrus v1.6.0 h1:UBcNElsrwanuuMsnGSlYmtmgbb23qDR5dG+6X6Oo89I
 github.com/sirupsen/logrus v1.6.0/go.mod h1:7uNnSEd1DgxDLC74fIahvMZmmYsHGZGEOFrfsX/uA88=
 github.com/streamingfast/atm v0.0.0-20211005171144-f2f3bbfda2f6 h1:S5hTdE/oi9kMqkAvZlFX/+J8AyWLoxR8sYioQB/23iQ=
 github.com/streamingfast/atm v0.0.0-20211005171144-f2f3bbfda2f6/go.mod h1:iISPGAstbUsPgyC3auLLi7PYUTi9lHv5z0COam0OPOY=
+github.com/streamingfast/atm v0.0.0-20211217182254-d1ed00f538eb h1:JsOT6L0BJ1WMXzrevZvo02NibpdOVslB3AA/2B45WH0=
+github.com/streamingfast/atm v0.0.0-20211217182254-d1ed00f538eb/go.mod h1:iISPGAstbUsPgyC3auLLi7PYUTi9lHv5z0COam0OPOY=
 github.com/streamingfast/bstream v0.0.2-0.20211006133909-71ab5cca098d h1:Jyvkec9QOaKZFwX2R+83nFh7hr2iHKjCfGwrfd1d/98=
 github.com/streamingfast/bstream v0.0.2-0.20211006133909-71ab5cca098d/go.mod h1:nK+2XGFQR2/xbtGJQN96iwNDm6tb0GgxRKWM1a4zwXg=
 github.com/streamingfast/bstream v0.0.2-0.20211209202442-73053c07cf54 h1:SWUCRDddjQerE6mpTkEGdMb1qBvOr39VM7/BTIMu0a0=
 github.com/streamingfast/bstream v0.0.2-0.20211209202442-73053c07cf54/go.mod h1:Mfq1/x9jK+Bu8Uzi6s5taAwTknZOGZ05hDJdkvpd3CQ=
 github.com/streamingfast/bstream v0.0.2-0.20211210153845-a3cb593a5df1 h1:GfntK61ZQ/KjBZV9WF97CGt9QGNNc/SoGjpsm6p3JJ8=
 github.com/streamingfast/bstream v0.0.2-0.20211210153845-a3cb593a5df1/go.mod h1:+eAjBVVoNjsRVkA40m54lO4B+Xze6bfWjMgo3ONUDO8=
+github.com/streamingfast/bstream v0.0.2-0.20220120223941-1839129eec9d h1:IRqfpbTinFJEVxHc9vT+q58pDHgipdaT9vie1pOscR0=
+github.com/streamingfast/bstream v0.0.2-0.20220120223941-1839129eec9d/go.mod h1:eZj+vovnWEvfJZ1aiV2JEjUQVXzgI+IvvN6zg87yaug=
 github.com/streamingfast/dbin v0.0.0-20210809205249-73d5eca35dc5 h1:m/3aIPNXCwZ9m/dfYdOs8ftrS7GJl82ipVr6K2aZiBs=
 github.com/streamingfast/dbin v0.0.0-20210809205249-73d5eca35dc5/go.mod h1:YStE7K5/GH47JsWpY7LMKsDaXXpMLU/M26vYFzXHYRk=
 github.com/streamingfast/derr v0.0.0-20210810022442-32249850a4fb/go.mod h1:zL7vriSdKmvbNntPVlXzPDizifaTwUv6+1TGp6KdO88=
@@ -389,6 +393,8 @@ github.com/streamingfast/pbgo v0.0.6-0.20211209181937-06ef048bad0c h1:u9Re7ErQoo
 github.com/streamingfast/pbgo v0.0.6-0.20211209181937-06ef048bad0c/go.mod h1:fobYEIfCKwPOY+VLX7HXBVuhrn+iZrzujKrpCgfG3+Q=
 github.com/streamingfast/pbgo v0.0.6-0.20211209212750-753f0acb6553 h1:617aWSg7BDGWqoiiZZ8vcSs/fcu4AsiEUIkBkqJ7+rc=
 github.com/streamingfast/pbgo v0.0.6-0.20211209212750-753f0acb6553/go.mod h1:fobYEIfCKwPOY+VLX7HXBVuhrn+iZrzujKrpCgfG3+Q=
+github.com/streamingfast/pbgo v0.0.6-0.20220104194237-6534a2f6320b h1:P8abwvd3psEdxZ76htpH0xy31gyrNYVWfi8iKjF7mCA=
+github.com/streamingfast/pbgo v0.0.6-0.20220104194237-6534a2f6320b/go.mod h1:fobYEIfCKwPOY+VLX7HXBVuhrn+iZrzujKrpCgfG3+Q=
 github.com/streamingfast/shutter v1.5.0 h1:NpzDYzj0HVpSiDJVO/FFSL6QIK/YKOxY0gJAtyaTOgs=
 github.com/streamingfast/shutter v1.5.0/go.mod h1:B/T6efqdeMGbGwjzPS1ToXzYZI4kDzI5/u4I+7qbjY8=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
