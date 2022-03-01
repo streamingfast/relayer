@@ -1,5 +1,7 @@
 module github.com/streamingfast/relayer
 
+go 1.16
+
 require (
 	github.com/golang/protobuf v1.5.2
 	github.com/streamingfast/bstream v0.0.2-0.20220301162141-6630bbe5996c
@@ -12,5 +14,3 @@ require (
 	go.uber.org/zap v1.21.0
 	google.golang.org/grpc v1.44.0
 )
-
-go 1.13
