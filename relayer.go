@@ -29,13 +29,13 @@ import (
 	"github.com/streamingfast/bstream/forkable"
 	"github.com/streamingfast/dgrpc"
 	"github.com/streamingfast/dstore"
-	pbhealth "github.com/streamingfast/pbgo/grpc/health/v1"
 	pbheadinfo "github.com/streamingfast/pbgo/sf/headinfo/v1"
 	pbmerger "github.com/streamingfast/pbgo/sf/merger/v1"
 	"github.com/streamingfast/relayer/metrics"
 	"github.com/streamingfast/shutter"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+	pbhealth "google.golang.org/grpc/health/grpc_health_v1"
 )
 
 const (

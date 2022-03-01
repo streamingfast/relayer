@@ -22,11 +22,11 @@ import (
 	"github.com/streamingfast/bstream"
 	"github.com/streamingfast/dmetrics"
 	"github.com/streamingfast/dstore"
-	pbhealth "github.com/streamingfast/pbgo/grpc/health/v1"
-	"github.com/streamingfast/shutter"
 	"github.com/streamingfast/relayer"
 	"github.com/streamingfast/relayer/metrics"
+	"github.com/streamingfast/shutter"
 	"go.uber.org/zap"
+	pbhealth "google.golang.org/grpc/health/grpc_health_v1"
 )
 
 var RelayerStartAborted = fmt.Errorf("getting start block aborted by relayer application terminating signal")
