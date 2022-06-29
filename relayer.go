@@ -17,7 +17,6 @@ package relayer
 import (
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"strings"
 	"sync"
@@ -30,7 +29,6 @@ import (
 	"github.com/streamingfast/dgrpc"
 	"github.com/streamingfast/dstore"
 	pbheadinfo "github.com/streamingfast/pbgo/sf/headinfo/v1"
-	pbmerger "github.com/streamingfast/pbgo/sf/merger/v1"
 	"github.com/streamingfast/relayer/metrics"
 	"github.com/streamingfast/shutter"
 	"go.uber.org/zap"
@@ -325,10 +323,7 @@ func (r *Relayer) StartRelayingBlocks(startBlockReady chan uint64, blockStore ds
 		gate := bstream.NewBlockNumGate(startBlock, bstream.GateInclusive, h, bstream.GateOptionWithLogger(zlog))
 
 		fileSourceFactory := bstream.SourceFactory(func(subHandler bstream.Handler) bstream.Source {
-			options := []bstream.FileSourceOption{
-				bstream.FileSourceWithNotFoundCallBack(r.FileSourceNotFoundCallBack()),
-			}
-			return bstream.NewFileSource(blockStore, startBlock, 2, filterPreprocessFunc, subHandler, options...)
+			return bstream.NewFileSource(blockStore, startBlock, subHandler, zlog, bstream.FileSourceWithConcurrentPreprocess(filterPreprocessFunc, 2))
 		})
 
 		zlog.Info("new joining source with", zap.Uint64("start_block_num", startBlock))
@@ -378,85 +373,6 @@ func (r *Relayer) StartRelayingBlocks(startBlockReady chan uint64, blockStore ds
 	err := r.source.Err()
 	zlog.Debug("shutting down relayer because source was shut down", zap.Error(err))
 	r.Shutdown(err)
-}
-
-func (r *Relayer) FileSourceNotFoundCallBack() bstream.NotFoundCallbackFunc {
-	if r.mergerAddr != "" {
-
-		return func(nextBaseBlockNum uint64, highestFileProcessedBlock bstream.BlockRef, handler bstream.Handler, logger *zap.Logger) error {
-			targetJoinBlock := lowestIDInBufferGTE(nextBaseBlockNum, r.joiningSource.BufferRef())
-			if targetJoinBlock == nil {
-				return nil
-			}
-
-			err := handleBlockFromMerger(
-				logger,
-				nextBaseBlockNum,
-				targetJoinBlock.ID(),
-				r.mergerAddr,
-				handler,
-			)
-
-			if err != nil {
-				logger.Info("cannot join using merger source", zap.Error(err), zap.Stringer("target_join_block", targetJoinBlock))
-				return nil
-			}
-
-			logger.Info("launching source from merger", zap.Uint64("low_block_num", nextBaseBlockNum), zap.Stringer("target_join_block", targetJoinBlock))
-			return nil
-		}
-	}
-	return nil
-}
-
-func handleBlockFromMerger(logger *zap.Logger, blockNum uint64, blockID string, mergerAddr string, handler bstream.Handler) error {
-	conn, err := dgrpc.NewInternalClient(mergerAddr)
-	if err != nil {
-		return fmt.Errorf("new connection to merger: %w", err)
-	}
-
-	client := pbmerger.NewMergerClient(conn)
-	stream, err := client.PreMergedBlocks(
-		context.Background(),
-		&pbmerger.Request{
-			LowBlockNum: blockNum,
-			HighBlockID: blockID,
-		},
-		grpc.WaitForReady(false),
-	)
-	if err != nil {
-		return fmt.Errorf("getting block stream from merger: %w", err)
-	}
-
-	header, err := stream.Header()
-	if err != nil {
-		return err
-	}
-	// we return failure to obtain blocks inside GRPC header
-	if errmsgs := header.Get("error"); len(errmsgs) > 0 {
-		return fmt.Errorf("%s", errmsgs[0])
-	}
-
-	for {
-		resp, err := stream.Recv()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return fmt.Errorf("receiving message from merger pre merger block stream: %w", err)
-		}
-
-		logger.Debug("receive pre merge block", zap.Uint64("block_num", resp.Block.Number), zap.String("block_id", resp.Block.Id))
-		nativeBlock, err := bstream.NewBlockFromProto(resp.Block)
-		if err != nil {
-			return fmt.Errorf("block from proto: %w", err)
-		}
-		err = handler.ProcessBlock(nativeBlock, nil)
-		if err != nil {
-			return fmt.Errorf("handler process block: %w", err)
-		}
-	}
-	return nil
 }
 
 func lowestIDInBufferGTE(blockNum uint64, buf *bstream.Buffer) (blk bstream.BlockRef) {
