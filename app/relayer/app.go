@@ -34,74 +34,73 @@ var RelayerStartAborted = fmt.Errorf("getting start block aborted by relayer app
 type Config struct {
 	SourcesAddr        []string
 	GRPCListenAddr     string
-	MergerAddr         string
 	BufferSize         int
 	SourceRequestBurst int
 	MaxSourceLatency   time.Duration
-	MinStartOffset     uint64
-	SourceStoreURL     string
+	OneBlocksURL       string
 }
 
 func (c *Config) ZapFields() []zap.Field {
 	return []zap.Field{
 		zap.Strings("sources_addr", c.SourcesAddr),
 		zap.String("grpc_listen_addr", c.GRPCListenAddr),
-		zap.String("merger_addr", c.MergerAddr),
 		zap.Int("buffer_size", c.BufferSize),
 		zap.Int("source_request_burst", c.SourceRequestBurst),
 		zap.Duration("max_source_latency", c.MaxSourceLatency),
-		zap.Uint64("min_start_offset", c.MinStartOffset),
-		zap.String("source_store_url", c.SourceStoreURL),
+		zap.String("one_blocks_url", c.OneBlocksURL),
 	}
-}
-
-type Modules struct {
-	BlockFilter func(blk *bstream.Block) error
 }
 
 type App struct {
 	*shutter.Shutter
-	config  *Config
-	modules *Modules
+	config *Config
 
 	relayer *relayer.Relayer
 }
 
-func New(config *Config, modules *Modules) *App {
+func New(config *Config) *App {
 	return &App{
 		Shutter: shutter.New(),
 		config:  config,
-		modules: modules,
 	}
 }
 
 func (a *App) Run() error {
 	dmetrics.Register(metrics.MetricSet)
 
-	zlog.Info("starting relayer", a.config.ZapFields()...)
-	a.relayer = relayer.NewRelayer(
-		a.modules.BlockFilter,
-		a.config.SourcesAddr,
-		a.config.MergerAddr,
-		a.config.MaxSourceLatency,
-		a.config.GRPCListenAddr,
-		a.config.BufferSize,
-		a.config.SourceRequestBurst,
-	)
-	startBlockReady := make(chan uint64)
-	go a.relayer.PollSourceHeadUntilReady(startBlockReady, a.config.MaxSourceLatency, a.config.MinStartOffset)
-
-	a.relayer.StartListening(a.config.BufferSize)
-
-	blocksStore, err := dstore.NewDBinStore(a.config.SourceStoreURL)
+	oneBlocksStore, err := dstore.NewDBinStore(a.config.OneBlocksURL)
 	if err != nil {
 		return fmt.Errorf("getting block store: %w", err)
 	}
 
+	liveSourceFactory := bstream.SourceFactory(func(h bstream.Handler) bstream.Source {
+		return relayer.NewMultiplexedSource(
+			h,
+			a.config.SourcesAddr,
+			a.config.MaxSourceLatency,
+			a.config.SourceRequestBurst,
+		)
+	})
+	oneBlocksSourceFactory := bstream.SourceFromNumFactory(func(num uint64, h bstream.Handler) bstream.Source {
+		src, err := bstream.NewOneBlocksSource(num, oneBlocksStore, h)
+		if err != nil {
+			return nil
+		}
+		return src
+	})
+
+	zlog.Info("starting relayer", a.config.ZapFields()...)
+	a.relayer = relayer.NewRelayer(
+		liveSourceFactory,
+		oneBlocksSourceFactory,
+		a.config.GRPCListenAddr,
+		a.config.BufferSize,
+	)
+
 	a.OnTerminating(a.relayer.Shutdown)
 	a.relayer.OnTerminated(a.Shutdown)
-	go a.relayer.StartRelayingBlocks(startBlockReady, blocksStore)
 
+	a.relayer.Run()
 	return nil
 }
 

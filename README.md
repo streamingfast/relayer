@@ -18,6 +18,36 @@ Current implementations:
 * [**Ethereum on StreamingFast**](https://github.com/streamingfast/sf-ethereum)
 
 
+## Schema
+
+```
+			Graph:
+
+		                       [--------------]   [-------------------]
+		                       [ Mindreader-1 ]   [ Mindreader-2, ... ]
+		                       [--------------]   [-------------------]
+		                            \                 /
+		                             \               /
+		    [-----------------]    [-------------------]
+		    [ OneBlocksSource ]    [ MultiplexedSource ]
+		    [-----------------]    [-------------------]
+		                   \        /
+					    [-------------]
+					    [ ForkableHub ] (all blocks triggering StepNew)
+					    [-------------]
+                                 |
+                       (hub's single subscriber)
+				                 |
+ 		       [-----------------------------------]
+ 		       [   pipe Handler: Server.PushBlock  ]
+ 		       [-----------------------------------]
+	                          /          \
+		       [-----------------]   [---------------]
+		       [ Buffer (dedupe) ]-->[ Subscriptions ]
+		       [-----------------]   [---------------]
+
+```
+
 ## Contributing
 
 **Issues and PR in this repo related strictly to the relayer functionalities**
