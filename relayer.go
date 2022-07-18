@@ -58,6 +58,7 @@ func NewRelayer(
 	r := &Relayer{
 		Shutter:                shutter.New(),
 		grpcListenAddr:         grpcListenAddr,
+		bufferSize:             bufferSize,
 		liveSourceFactory:      liveSourceFactory,
 		oneBlocksSourceFactory: oneBlocksSourceFactory,
 	}
@@ -65,7 +66,6 @@ func NewRelayer(
 	gs := dgrpc.NewServer()
 	pbhealth.RegisterHealthServer(gs, r)
 	r.blockStreamServer = blockstream.NewBufferedServer(gs, bufferSize, blockstream.ServerOptionWithLogger(zlog))
-	r.StartListening(bufferSize)
 	return r
 
 }
@@ -113,6 +113,8 @@ func (r *Relayer) Run() {
 	go forkableHub.Run()
 	zlog.Info("waiting for hub to be ready...")
 	<-forkableHub.Ready
+
+	r.StartListening(r.bufferSize)
 
 	handler := bstream.HandlerFunc(func(blk *bstream.Block, _ interface{}) error {
 		zlog.Debug("publishing block", zap.Stringer("block", blk))
