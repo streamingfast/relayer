@@ -23,7 +23,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/protobuf/ptypes"
 	"github.com/streamingfast/bstream"
 	"github.com/streamingfast/bstream/blockstream"
 	"github.com/streamingfast/bstream/forkable"
@@ -34,6 +33,7 @@ import (
 	"github.com/streamingfast/relayer/metrics"
 	"github.com/streamingfast/shutter"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
 	pbhealth "google.golang.org/grpc/health/grpc_health_v1"
 )
@@ -106,7 +106,7 @@ func (r *Relayer) PollSourceHeadUntilReady(readyStartBlock chan uint64, maxSourc
 	defer close(readyStartBlock)
 
 	sleepTime := 0 * time.Second
-	logCounter := 0
+	repeatedLogger := newRepeatingLogger(zlog, repeatingLoggerConfig{RepeatLevel: zap.DebugLevel, RepeatEach: 30 * time.Second, ResetToFirstEach: 3 * time.Minute})
 
 	for {
 		select {
@@ -116,19 +116,13 @@ func (r *Relayer) PollSourceHeadUntilReady(readyStartBlock chan uint64, maxSourc
 			return
 		}
 
-		headInfo := r.fetchHighestHeadInfo()
+		headInfo := r.fetchHighestHeadInfo(repeatedLogger)
 		if headInfo == nil {
-			if logCounter%5 == 0 {
-				zlog.Info("cannot get head info mindreader, retrying forever", zap.Any("sources_addr", r.sourceAddresses))
-			}
+			repeatedLogger.Log("cannot get head info mindreader, retrying forever", zap.Any("sources_addr", r.sourceAddresses))
 			continue
 		}
 
-		headTime, err := ptypes.Timestamp(headInfo.HeadTime)
-		if err != nil {
-			zlog.Error("invalid headtime retrieved from upstread headinfo")
-			continue
-		}
+		headTime := headInfo.HeadTime.AsTime()
 
 		r.blockStreamServer.SetHeadInfo(headInfo.HeadNum, headInfo.HeadID, headTime, headInfo.LibNum)
 		r.ready = true
@@ -138,14 +132,66 @@ func (r *Relayer) PollSourceHeadUntilReady(readyStartBlock chan uint64, maxSourc
 			readyStartBlock <- calculateDesiredStartBlock(headInfo.HeadNum, headInfo.LibNum, minOffsetToHead)
 			return
 		} else {
-			if logCounter%5 == 0 {
-				zlog.Info("source head latency too high", zap.Any("sources_addr", r.sourceAddresses), zap.Duration("max_source_latency", maxSourceLatency), zap.Duration("observed_latency", observedLatency))
-			}
+			repeatedLogger.Log("source head latency too high", zap.Any("sources_addr", r.sourceAddresses), zap.Duration("max_source_latency", maxSourceLatency), zap.Duration("observed_latency", observedLatency))
 		}
 	}
 }
 
-func (r *Relayer) fetchHighestHeadInfo() (headInfo *pbheadinfo.HeadInfoResponse) {
+type repeatingLoggerConfig struct {
+	FirstLevel       zapcore.Level
+	RepeatLevel      zapcore.Level
+	RepeatEach       time.Duration
+	ResetToFirstEach time.Duration
+}
+
+type repeatingLogger struct {
+	startTime        time.Time
+	lastRepeatedTime time.Time
+	firstPassed      bool
+
+	logger *zap.Logger
+	config repeatingLoggerConfig
+}
+
+func newRepeatingLogger(logger *zap.Logger, config repeatingLoggerConfig) *repeatingLogger {
+	return &repeatingLogger{
+		startTime:        time.Now(),
+		lastRepeatedTime: time.Now(),
+
+		logger: logger,
+		config: config,
+	}
+}
+
+func (l *repeatingLogger) Log(msg string, fields ...zapcore.Field) {
+	if l.firstPassed && l.config.ResetToFirstEach != 0 && time.Since(l.startTime) > l.config.ResetToFirstEach {
+		l.startTime = time.Now()
+		l.lastRepeatedTime = time.Now()
+		l.firstPassed = false
+	}
+
+	level := l.config.RepeatLevel
+	if !l.firstPassed {
+		level = l.config.FirstLevel
+	}
+
+	shouldRepeat := true
+	if l.config.RepeatEach != 0 {
+		if time.Since(l.lastRepeatedTime) > l.config.RepeatEach {
+			l.lastRepeatedTime = time.Now()
+		} else {
+			shouldRepeat = false
+		}
+	}
+
+	if !l.firstPassed || shouldRepeat {
+		l.logger.Check(level, msg).Write(fields...)
+	}
+
+	l.firstPassed = true
+}
+
+func (r *Relayer) fetchHighestHeadInfo(logger *repeatingLogger) (headInfo *pbheadinfo.HeadInfoResponse) {
 	for _, addr := range r.sourceAddresses {
 		headInfoClient := r.sourceHeadClientCache[addr]
 		if headInfoClient == nil {
@@ -164,7 +210,7 @@ func (r *Relayer) fetchHighestHeadInfo() (headInfo *pbheadinfo.HeadInfoResponse)
 		defer cancel()
 		remoteHead, err := headInfoClient.GetHeadInfo(ctx, &pbheadinfo.HeadInfoRequest{}, grpc.WaitForReady(false))
 		if err != nil || remoteHead == nil {
-			zlog.Info("cannot get headinfo from backend", zap.String("address", addr), zap.Error(err))
+			logger.Log("cannot get headinfo from backend", zap.String("address", addr), zap.Error(err))
 			continue
 		}
 		if headInfo == nil || remoteHead.HeadNum > headInfo.HeadNum {
