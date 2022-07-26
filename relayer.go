@@ -142,7 +142,7 @@ func (r *Relayer) Run() {
 		r.blockStreamServer.Close()
 	})
 
-	zlog.Info("Relayer started")
+	zlog.Info("relayer started")
 	r.ready = true
 	r.hubSource.Run()
 
