@@ -74,8 +74,9 @@ func NewMultiplexedSource(handler bstream.Handler, sourceAddresses []string, max
 	ctx := context.Background()
 
 	var sourceFactories []bstream.SourceFactory
-	for _, url := range sourceAddresses {
+	for _, u := range sourceAddresses {
 
+		url := u // https://github.com/golang/go/wiki/CommonMistakes (url is given to the blockstream newSource)
 		sourceName := urlToLoggerName(url)
 		logger := zlog.Named("src").Named(sourceName)
 		sf := func(subHandler bstream.Handler) bstream.Source {
@@ -117,7 +118,9 @@ func (r *Relayer) Run() {
 	r.StartListening(r.bufferSize)
 
 	handler := bstream.HandlerFunc(func(blk *bstream.Block, _ interface{}) error {
-		zlog.Debug("publishing block", zap.Stringer("block", blk))
+		if ztrace.Enabled() {
+			zlog.Debug("publishing block", zap.Stringer("block", blk))
+		}
 
 		metrics.HeadBlockTimeDrift.SetBlockTime(blk.Time())
 		metrics.HeadBlockNumber.SetUint64(blk.Num())

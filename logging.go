@@ -18,4 +18,4 @@ import (
 	"github.com/streamingfast/logging"
 )
 
-var zlog, _ = logging.PackageLogger("relayer", "github.com/streamingfast/relayer")
+var zlog, ztrace = logging.PackageLogger("relayer", "github.com/streamingfast/relayer")
