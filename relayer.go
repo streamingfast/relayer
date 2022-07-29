@@ -129,11 +129,17 @@ func (r *Relayer) Run() {
 	})
 
 	for {
-		zlog.Info("getting a block source from hub...")
-		if src := forkableHub.SourceFromBlockNum(forkableHub.LowestBlockNum(), handler); src != nil {
+		hubLow := forkableHub.LowestBlockNum()
+		hubHigh := forkableHub.HeadNum()
+		lowest := hubLow
+		if hubHigh-hubLow > uint64(r.bufferSize) {
+			lowest = hubHigh - uint64(r.bufferSize)
+		}
+		if src := forkableHub.SourceFromBlockNum(lowest, handler); src != nil {
 			r.hubSource = src
 			break
 		}
+		zlog.Info("cannot a block source from hub, retrying...", zap.Uint64("lowest", lowest))
 		time.Sleep(500 * time.Millisecond)
 	}
 
