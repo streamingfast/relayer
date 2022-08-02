@@ -3,7 +3,7 @@ module github.com/streamingfast/relayer
 go 1.16
 
 require (
-	github.com/streamingfast/bstream v0.0.2-0.20220802181939-e4281633e7c7
+	github.com/streamingfast/bstream v0.0.2-0.20220802193619-563b96c53fda
 	github.com/streamingfast/dgrpc v0.0.0-20220301153539-536adf71b594
 	github.com/streamingfast/dmetrics v0.0.0-20210811180524-8494aeb34447
 	github.com/streamingfast/dstore v0.1.1-0.20220607202639-35118aeaf648
