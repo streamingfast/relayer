@@ -26,7 +26,6 @@ import (
 	"github.com/streamingfast/dgrpc"
 	"github.com/streamingfast/relayer/metrics"
 	"github.com/streamingfast/shutter"
-	"go.uber.org/zap"
 	pbhealth "google.golang.org/grpc/health/grpc_health_v1"
 )
 
@@ -38,34 +37,41 @@ type Relayer struct {
 	*shutter.Shutter
 
 	grpcListenAddr         string
-	bufferSize             int
 	liveSourceFactory      bstream.SourceFactory
-	oneBlocksSourceFactory bstream.SourceFromNumFactory
+	oneBlocksSourceFactory bstream.SourceFromNumFactoryWithSkipFunc
 
-	hub       *hub.ForkableHub
-	hubSource bstream.Source
+	hub *hub.ForkableHub
 
 	ready bool
 
-	blockStreamServer *blockstream.Server
+	blockStreamServer *hub.BlockstreamServer
 }
 
 func NewRelayer(
 	liveSourceFactory bstream.SourceFactory,
-	oneBlocksSourceFactory bstream.SourceFromNumFactory,
+	oneBlocksSourceFactory bstream.SourceFromNumFactoryWithSkipFunc,
 	grpcListenAddr string,
-	bufferSize int) *Relayer {
+) *Relayer {
 	r := &Relayer{
 		Shutter:                shutter.New(),
 		grpcListenAddr:         grpcListenAddr,
-		bufferSize:             bufferSize,
 		liveSourceFactory:      liveSourceFactory,
 		oneBlocksSourceFactory: oneBlocksSourceFactory,
 	}
 
 	gs := dgrpc.NewServer()
 	pbhealth.RegisterHealthServer(gs, r)
-	r.blockStreamServer = blockstream.NewBufferedServer(gs, bufferSize, blockstream.ServerOptionWithLogger(zlog))
+
+	forkableHub := hub.NewForkableHub(
+		r.liveSourceFactory,
+		r.oneBlocksSourceFactory,
+		10,
+		forkable.EnsureAllBlocksTriggerLongestChain(), // send every forked block too
+		forkable.WithFilters(bstream.StepNew),
+	)
+	r.hub = forkableHub
+
+	r.blockStreamServer = r.hub.NewBlockstreamServer(gs)
 	return r
 
 }
@@ -103,61 +109,36 @@ func urlToLoggerName(url string) string {
 	return strings.TrimPrefix(strings.TrimPrefix(url, "dns:///"), ":")
 }
 
-func (r *Relayer) Run() {
-	forkableHub := hub.NewForkableHub(
-		r.liveSourceFactory,
-		r.oneBlocksSourceFactory,
-		110,
-		forkable.EnsureAllBlocksTriggerLongestChain(), // send every forked block too
-		forkable.WithFilters(bstream.StepNew),
-	)
-	go forkableHub.Run()
-	zlog.Info("waiting for hub to be ready...")
-	<-forkableHub.Ready
-
-	r.StartListening(r.bufferSize)
-
-	handler := bstream.HandlerFunc(func(blk *bstream.Block, _ interface{}) error {
-		if ztrace.Enabled() {
-			zlog.Debug("publishing block", zap.Stringer("block", blk))
-		}
-
-		metrics.HeadBlockTimeDrift.SetBlockTime(blk.Time())
-		metrics.HeadBlockNumber.SetUint64(blk.Num())
-
-		return r.blockStreamServer.PushBlock(blk)
-	})
-
+func pollMetrics(fh *hub.ForkableHub) {
 	for {
-		hubLow := forkableHub.LowestBlockNum()
-		hubHigh := forkableHub.HeadNum()
-		lowest := hubLow
-		if hubHigh-hubLow > uint64(r.bufferSize) {
-			lowest = hubHigh - uint64(r.bufferSize)
+		time.Sleep(time.Second * 4)
+		headNum, _, headTime, _, err := fh.HeadInfo()
+		if err != nil {
+			zlog.Info("cannot get head info yet")
+			continue
 		}
-		if src := forkableHub.SourceFromBlockNum(lowest, handler); src != nil {
-			r.hubSource = src
-			break
-		}
-		zlog.Info("cannot a block source from hub, retrying...", zap.Uint64("lowest", lowest))
-		time.Sleep(500 * time.Millisecond)
+		metrics.HeadBlockTimeDrift.SetBlockTime(headTime)
+		metrics.HeadBlockNumber.SetUint64(headNum)
 	}
+}
+
+func (r *Relayer) Run() {
+	go r.hub.Run()
+	zlog.Info("waiting for hub to be ready...")
+	<-r.hub.Ready
+
+	r.StartListening()
 
 	r.OnTerminating(func(e error) {
-		zlog.Info("shutting down source")
-		r.hubSource.Shutdown(e)
-
 		zlog.Info("closing block stream server")
 		r.blockStreamServer.Close()
 	})
 
 	zlog.Info("relayer started")
 	r.ready = true
-	r.hubSource.Run()
 
-	err := r.hubSource.Err()
-	zlog.Debug("shutting down relayer because source was shut down", zap.Error(err))
-	r.Shutdown(err)
+	<-r.hub.Terminating()
+	r.Shutdown(r.hub.Err())
 }
 
 type namedObj struct {

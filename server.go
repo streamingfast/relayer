@@ -7,7 +7,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func (r *Relayer) StartListening(bufferSize int) error {
+func (r *Relayer) StartListening() error {
 	lis, err := net.Listen("tcp", r.grpcListenAddr)
 	if err != nil {
 		return fmt.Errorf("failed listening grpc %q: %w", r.grpcListenAddr, err)

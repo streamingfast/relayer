@@ -34,7 +34,6 @@ var RelayerStartAborted = fmt.Errorf("getting start block aborted by relayer app
 type Config struct {
 	SourcesAddr        []string
 	GRPCListenAddr     string
-	BufferSize         int
 	SourceRequestBurst int
 	MaxSourceLatency   time.Duration
 	OneBlocksURL       string
@@ -44,7 +43,6 @@ func (c *Config) ZapFields() []zap.Field {
 	return []zap.Field{
 		zap.Strings("sources_addr", c.SourcesAddr),
 		zap.String("grpc_listen_addr", c.GRPCListenAddr),
-		zap.Int("buffer_size", c.BufferSize),
 		zap.Int("source_request_burst", c.SourceRequestBurst),
 		zap.Duration("max_source_latency", c.MaxSourceLatency),
 		zap.String("one_blocks_url", c.OneBlocksURL),
@@ -81,8 +79,8 @@ func (a *App) Run() error {
 			a.config.SourceRequestBurst,
 		)
 	})
-	oneBlocksSourceFactory := bstream.SourceFromNumFactory(func(num uint64, h bstream.Handler) bstream.Source {
-		src, err := bstream.NewOneBlocksSource(num, oneBlocksStore, h)
+	oneBlocksSourceFactory := bstream.SourceFromNumFactoryWithSkipFunc(func(num uint64, h bstream.Handler, skipFunc func(idSuffix string) bool) bstream.Source {
+		src, err := bstream.NewOneBlocksSource(num, oneBlocksStore, h, bstream.OneBlocksSourceWithSkipperFunc(skipFunc))
 		if err != nil {
 			return nil
 		}
@@ -94,7 +92,6 @@ func (a *App) Run() error {
 		liveSourceFactory,
 		oneBlocksSourceFactory,
 		a.config.GRPCListenAddr,
-		a.config.BufferSize,
 	)
 
 	a.OnTerminating(a.relayer.Shutdown)
