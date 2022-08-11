@@ -137,6 +137,7 @@ func (r *Relayer) Run() {
 
 	zlog.Info("relayer started")
 	r.ready = true
+	metrics.AppReadiness.SetReady()
 
 	<-r.hub.Terminating()
 	r.Shutdown(r.hub.Err())

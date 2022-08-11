@@ -73,7 +73,7 @@ func (a *App) Run() error {
 
 	liveSourceFactory := bstream.SourceFactory(func(h bstream.Handler) bstream.Source {
 		return relayer.NewMultiplexedSource(
-			h,
+			bstream.WithHeadMetrics(h, metrics.HeadBlockNumber, metrics.HeadBlockTimeDrift),
 			a.config.SourcesAddr,
 			a.config.MaxSourceLatency,
 			a.config.SourceRequestBurst,
