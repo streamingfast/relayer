@@ -8,9 +8,10 @@ blockchain nodes, down to services, serving as a redundant and
 highly-available access to streaming block & transaction data.
 It is part of **[StreamingFast](https://github.com/streamingfast/streamingfast)**.
 
-## Installation & Usage
+Design
+The Relayer section of the official Firehose documentation provides additional information on its design details.
 
-See the different protocol-specific `StreamingFast` binaries at https://github.com/streamingfast/streamingfast#protocols
+https://firehose.streamingfast.io/concepts-and-architeceture/components#relayer
 
 Current implementations:
 
