@@ -68,7 +68,7 @@ func NewRelayer(
 		10,
 		forkable.EnsureAllBlocksTriggerLongestChain(), // send every forked block too
 		forkable.WithFilters(bstream.StepNew),
-		forkable.WithFailOnUnlinkableBlocks(20),
+		forkable.WithFailOnUnlinkableBlocks(20, time.Minute),
 	)
 	r.hub = forkableHub
 
