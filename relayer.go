@@ -112,7 +112,7 @@ func urlToLoggerName(url string) string {
 
 func pollMetrics(fh *hub.ForkableHub) {
 	for {
-		time.Sleep(time.Second * 4)
+		time.Sleep(time.Second * 2)
 		headNum, _, headTime, _, err := fh.HeadInfo()
 		if err != nil {
 			zlog.Info("cannot get head info yet")
@@ -127,6 +127,7 @@ func (r *Relayer) Run() {
 	go r.hub.Run()
 	zlog.Info("waiting for hub to be ready...")
 	<-r.hub.Ready
+	go pollMetrics(r.hub)
 
 	r.StartListening()
 
