@@ -23,7 +23,7 @@ import (
 	"github.com/streamingfast/bstream/blockstream"
 	"github.com/streamingfast/bstream/forkable"
 	"github.com/streamingfast/bstream/hub"
-	"github.com/streamingfast/dgrpc"
+	dgrpcfactory "github.com/streamingfast/dgrpc/server/factory"
 	"github.com/streamingfast/relayer/metrics"
 	"github.com/streamingfast/shutter"
 	pbhealth "google.golang.org/grpc/health/grpc_health_v1"
@@ -59,8 +59,8 @@ func NewRelayer(
 		oneBlocksSourceFactory: oneBlocksSourceFactory,
 	}
 
-	gs := dgrpc.NewServer()
-	pbhealth.RegisterHealthServer(gs, r)
+	gs := dgrpcfactory.ServerFromOptions()
+	pbhealth.RegisterHealthServer(gs.ServiceRegistrar(), r)
 
 	forkableHub := hub.NewForkableHub(
 		r.liveSourceFactory,
@@ -71,7 +71,7 @@ func NewRelayer(
 		forkable.WithFailOnUnlinkableBlocks(20, time.Minute),
 	)
 	r.hub = forkableHub
-
+	gs.OnTerminated(r.Shutdown)
 	r.blockStreamServer = r.hub.NewBlockstreamServer(gs)
 	return r
 
@@ -129,12 +129,12 @@ func (r *Relayer) Run() {
 	<-r.hub.Ready
 	go pollMetrics(r.hub)
 
-	r.StartListening()
-
 	r.OnTerminating(func(e error) {
 		zlog.Info("closing block stream server")
 		r.blockStreamServer.Close()
 	})
+
+	r.blockStreamServer.Launch(r.grpcListenAddr)
 
 	zlog.Info("relayer started")
 	r.ready = true
